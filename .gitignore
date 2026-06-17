@@ -1,0 +1,14 @@
+.venv/
+/media/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.pot
+*.pyc
+*.mo
+*.swp
+.DS_Store

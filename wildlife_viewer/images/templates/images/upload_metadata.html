@@ -1,11 +1,65 @@
 <h1>Upload Metadata</h1>
 
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Upload</button>
-</form>
+{% if messages %}
+    {% for message in messages %}
+        <p><strong>{{ message }}</strong></p>
+    {% endfor %}
+{% endif %}
+
+<hr>
+
+<h2>1. Upload Box Image Metadata JSON</h2>
 
 <p>
-    <a href="{% url 'researcher_dashboard' %}">Back to Dashboard</a>
+    Use this for the JSON file that contains file names, Box file IDs,
+    paths, file URLs, direct download URLs, and preview URLs.
+</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="upload_type" value="box_images">
+
+    {{ box_form.as_p }}
+
+    <button type="submit">Upload Box Image Metadata</button>
+</form>
+
+<hr>
+
+<h2>2. Upload SpeciesNet Results JSONL</h2>
+
+<p>
+    Use this for the SpeciesNet output file where each line is one JSON object.
+</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="upload_type" value="speciesnet">
+
+    {{ speciesnet_form.as_p }}
+
+    <button type="submit">Upload SpeciesNet Results</button>
+</form>
+
+<hr>
+
+<h2>3. Upload PaddleOCR Results JSONL</h2>
+
+<p>
+    Use this for the OCR output file where each line contains OCR text metadata.
+</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="upload_type" value="ocr">
+
+    {{ ocr_form.as_p }}
+
+    <button type="submit">Upload OCR Results</button>
+</form>
+
+<hr>
+
+<p>
+    <a href="{% url 'researcher_dashboard' %}">Back to researcher dashboard</a>
 </p>

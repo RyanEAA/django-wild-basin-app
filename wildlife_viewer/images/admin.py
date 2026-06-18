@@ -1,10 +1,55 @@
 from django.contrib import admin
+from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings
 
-from images.models import ImageRecord, OCRResult, SpeciesNetResult, AppSettings
 
-# Register your models here.
-admin.site.register(ImageRecord)
-admin.site.register(SpeciesNetResult)
-admin.site.register(OCRResult)
-admin.site.register(AppSettings)
+@admin.register(ImageRecord)
+class ImageRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "file_name",
+        "file_id",
+        "path",
+        "cache_last_accessed",
+    )
+    search_fields = ("file_name", "file_id", "path")
 
+
+@admin.register(SpeciesNetResult)
+class SpeciesNetResultAdmin(admin.ModelAdmin):
+    list_display = (
+        "image",
+        "prediction",
+        "prediction_score",
+        "prediction_source",
+    )
+    search_fields = ("image__file_name", "image__file_id", "prediction")
+
+
+@admin.register(OCRResult)
+class OCRResultAdmin(admin.ModelAdmin):
+    list_display = (
+        "image",
+        "status",
+        "temperature_f",
+        "capture_date",
+        "capture_time",
+    )
+    search_fields = ("image__file_name", "image__file_id")
+
+
+@admin.register(ImportJob)
+class ImportJobAdmin(admin.ModelAdmin):
+    list_display = (
+        "file_type",
+        "filename",
+        "researcher",
+        "records_created",
+        "records_updated",
+        "records_failed",
+        "uploaded_at",
+    )
+    list_filter = ("file_type", "uploaded_at")
+
+
+@admin.register(AppSettings)
+class AppSettingsAdmin(admin.ModelAdmin):
+    list_display = ("updated_at",)

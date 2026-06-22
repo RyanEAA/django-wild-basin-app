@@ -1,0 +1,61 @@
+<h1>{{ image.file_name }}</h1>
+
+<p>
+    <a href="{% url 'gallery' %}">Back to gallery</a>
+</p>
+
+{% if messages %}
+    {% for message in messages %}
+        <p><strong>{{ message }}</strong></p>
+    {% endfor %}
+{% endif %}
+
+{% if image_url %}
+    <img src="{{ image_url }}" style="max-width: 800px; width: 100%;">
+{% else %}
+    <p>No cached image available. Check Box token or direct download URL.</p>
+{% endif %}
+
+<hr>
+
+<h2>Current Metadata</h2>
+
+<p><strong>File ID:</strong> {{ image.file_id }}</p>
+<p><strong>Path:</strong> {{ image.path }}</p>
+<p><strong>Box URL:</strong> <a href="{{ image.file_url }}">{{ image.file_url }}</a></p>
+
+<h3>SpeciesNet</h3>
+<p><strong>Status:</strong> {{ species_result.status }}</p>
+<p><strong>Prediction:</strong> {{ species_result.prediction }}</p>
+<p><strong>Score:</strong> {{ species_result.prediction_score }}</p>
+<p><strong>Source:</strong> {{ species_result.prediction_source }}</p>
+<p><strong>Animals:</strong> {{ species_result.animals }}</p>
+<p><strong>Detections:</strong> {{ species_result.detections }}</p>
+
+<h3>OCR</h3>
+<p><strong>Status:</strong> {{ ocr_result.status }}</p>
+<p><strong>OCR Texts:</strong> {{ ocr_result.ocr_texts }}</p>
+<p><strong>Temperature:</strong> {{ ocr_result.temperature_f }}</p>
+<p><strong>Date:</strong> {{ ocr_result.capture_date }}</p>
+<p><strong>Time:</strong> {{ ocr_result.capture_time }}</p>
+
+{% if can_edit %}
+    <hr>
+
+    <h2>Edit Metadata</h2>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <h3>Image Record</h3>
+        {{ image_form.as_p }}
+
+        <h3>SpeciesNet Result</h3>
+        {{ species_form.as_p }}
+
+        <h3>OCR Result</h3>
+        {{ ocr_form.as_p }}
+
+        <button type="submit">Save Changes</button>
+    </form>
+{% endif %}

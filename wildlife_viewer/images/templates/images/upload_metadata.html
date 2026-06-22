@@ -1,5 +1,44 @@
 <h1>Upload Metadata</h1>
 
+<h2>Current Database Status</h2>
+
+<ul>
+    <li>Box Images: {{ box_count }}</li>
+    <li>SpeciesNet Results: {{ speciesnet_count }} — {{ speciesnet_coverage }}%</li>
+    <li>OCR Results: {{ ocr_count }} — {{ ocr_coverage }}%</li>
+    <li>Import Jobs: {{ import_job_count }}</li>
+</ul>
+
+<h2>Recent Uploads</h2>
+
+<table border="1" cellpadding="6">
+    <tr>
+        <th>File Type</th>
+        <th>Filename</th>
+        <th>Created</th>
+        <th>Updated</th>
+        <th>Failed</th>
+        <th>Uploaded At</th>
+    </tr>
+
+    {% for job in recent_jobs %}
+        <tr>
+            <td>{{ job.file_type }}</td>
+            <td>{{ job.filename }}</td>
+            <td>{{ job.records_created }}</td>
+            <td>{{ job.records_updated }}</td>
+            <td>{{ job.records_failed }}</td>
+            <td>{{ job.uploaded_at }}</td>
+        </tr>
+    {% empty %}
+        <tr>
+            <td colspan="6">No uploads yet.</td>
+        </tr>
+    {% endfor %}
+</table>
+
+<hr>
+
 {% if messages %}
     {% for message in messages %}
         <p><strong>{{ message }}</strong></p>

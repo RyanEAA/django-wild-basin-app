@@ -1,7 +1,80 @@
 <h1>Image Gallery</h1>
 
-<p>The gallery page is working</p>
+<form method="get">
+    {{ form.as_p }}
+    <button type="submit">Filter</button>
+    <a href="{% url 'gallery' %}">Clear filters</a>
+</form>
 
-<p>
-    <a href="{% url 'researcher_dashboard' %}">Researcher Dashboard</a>
-</p>
+<hr>
+
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+    {% for card in image_cards %}
+        <a href="{% url 'image_detail' card.image.file_id %}" style="text-decoration: none; color: black;">
+            <div style="border: 1px solid #ccc; padding: 10px; border-radius: 8px;">
+                {% if card.image_url %}
+                    <img src="{{ card.image_url }}" style="width: 100%; height: 180px; object-fit: cover;">
+                {% else %}
+                    <div style="height: 180px; background: #eee; display: flex; align-items: center; justify-content: center;">
+                        No image available
+                    </div>
+                {% endif %}
+
+                <h3>{{ card.image.file_name }}</h3>
+
+                <p><strong>Path:</strong> {{ card.image.path|truncatechars:60 }}</p>
+
+                {% if card.image.species_result %}
+                    <p>
+                        <strong>Prediction:</strong>
+                        {{ card.image.species_result.prediction|truncatechars:80 }}
+                    </p>
+
+                    <p>
+                        <strong>Score:</strong>
+                        {{ card.image.species_result.prediction_score }}
+                    </p>
+
+                    <p>
+                        <strong>Animals:</strong>
+                        {{ card.image.species_result.animals|length }}
+                    </p>
+                {% else %}
+                    <p>No SpeciesNet result.</p>
+                {% endif %}
+
+                {% if card.image.ocr_result %}
+                    <p>
+                        <strong>OCR:</strong>
+                        {{ card.image.ocr_result.ocr_texts|join:", "|truncatechars:80 }}
+                    </p>
+
+                    <p>
+                        <strong>Date:</strong>
+                        {{ card.image.ocr_result.capture_date }}
+                    </p>
+                {% else %}
+                    <p>No OCR result.</p>
+                {% endif %}
+            </div>
+        </a>
+    {% empty %}
+        <p>No images found.</p>
+    {% endfor %}
+</div>
+
+<hr>
+
+<div>
+    {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+    {% endif %}
+
+    <span>
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    {% endif %}
+</div>

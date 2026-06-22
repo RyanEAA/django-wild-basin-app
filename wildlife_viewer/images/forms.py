@@ -1,7 +1,8 @@
 import json
 from django import forms
 from django.core.exceptions import ValidationError
-
+from django import forms
+from .models import ImageRecord, SpeciesNetResult, OCRResult
 
 def validate_json_extension(file):
     if not file.name.lower().endswith(".json"):
@@ -109,7 +110,6 @@ class SpeciesNetUploadForm(forms.Form):
         ],
     )
 
-
 class OCRUploadForm(forms.Form):
     metadata_file = forms.FileField(
         label="PaddleOCR results JSONL",
@@ -118,3 +118,23 @@ class OCRUploadForm(forms.Form):
             validate_ocr_file,
         ],
     )
+
+class GalleryFilterForm(forms.Form):
+    search = forms.CharField(required=False)
+    species = forms.CharField(required=False)
+    has_ocr = forms.BooleanField(required=False)
+    has_speciesnet = forms.BooleanField(required=False)
+    min_score = forms.FloatField(required=False, min_value=0.0, max_value=1.0)
+    start_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    end_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+
+
+class SpeciesNetEditForm(forms.ModelForm):
+    class Meta:
+        model = SpeciesNetResult
+        fields = ["status", "prediction", "prediction_score", "prediction_source", "animals", "detections"]
+
+class OCREditForm(forms.ModelForm):
+    class Meta:
+        model = OCRResult
+        fields = ["status", "ocr_texts", "temperature_f", "capture_date", "capture_time", "capture_datetime"]

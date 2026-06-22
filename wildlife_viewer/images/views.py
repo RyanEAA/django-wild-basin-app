@@ -336,12 +336,10 @@ def image_detail(request, file_id):
         if not can_edit:
             return redirect("image_detail", file_id=image.file_id)
 
-        image_form = ImageRecordEditForm(request.POST, instance=image)
         species_form = SpeciesNetEditForm(request.POST, instance=species_result)
         ocr_form = OCREditForm(request.POST, instance=ocr_result)
 
-        if image_form.is_valid() and species_form.is_valid() and ocr_form.is_valid():
-            image_form.save()
+        if species_form.is_valid() and ocr_form.is_valid():
             species_form.save()
             ocr_form.save()
 
@@ -358,7 +356,6 @@ def image_detail(request, file_id):
         "species_result": species_result,
         "ocr_result": ocr_result,
         "can_edit": can_edit,
-        "image_form": image_form,
         "species_form": species_form,
         "ocr_form": ocr_form,
     })

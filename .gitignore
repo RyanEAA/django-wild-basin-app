@@ -12,3 +12,7 @@ __pycache__/
 *.mo
 *.swp
 .DS_Store
+*.JPG
+
+# Django media cache
+media/

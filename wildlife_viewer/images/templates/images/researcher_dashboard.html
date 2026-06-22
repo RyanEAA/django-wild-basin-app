@@ -2,6 +2,23 @@
 
 <p>Welcome to the Researcher Dashboard! Here you can view and manage your uploaded images, review OCR and SpeciesNet results, and update your metadata.</p>
 
+<!-- Box Token Status -->
+{% if box_token_status.ok %}
+    <p style="color: green;">
+        ✅ {{ box_token_status.message }}
+    </p>
+{% else %}
+    <p style="color: red;">
+        ⚠️ {{ box_token_status.message }}
+    </p>
+
+    <p>
+        Ask an admin to update the Box access token in App Settings.
+    </p>
+{% endif %}
+
+
+<!-- Place to upload metadata -->
 <p>
     <a href="{% url 'upload_metadata' %}">Upload Metadata</a>
 </p>

@@ -20,12 +20,15 @@ from .forms import (
 
 from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob
 
-from .services.box_cache import ensure_cached_image
+from .services.box_cache import ensure_cached_image, check_box_token_status
 
 @researcher_required
 def researcher_dashboard(request):
-    return render(request, "images/researcher_dashboard.html")
+    box_token_status = check_box_token_status()
 
+    return render(request, "images/researcher_dashboard.html", {
+        "box_token_status": box_token_status,
+    })
 
 @researcher_required
 def upload_metadata(request):

@@ -3,6 +3,8 @@ from django.shortcuts import render
 # Create your views here.
 import json
 
+from django.http import Http404
+
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
@@ -140,6 +142,11 @@ def gallery(request):
         "species_result",
         "ocr_result"
     ).order_by("-created_at")
+
+    # hide images labeled as "human" in Species
+    images = images.exclude(
+        species_result__prediction__icontains="human"
+    )
 
     form = GalleryFilterForm(request.GET)
 
@@ -328,6 +335,14 @@ def user_is_researcher(user):
 
 def image_detail(request, file_id):
     image = get_object_or_404(ImageRecord, file_id=file_id)
+
+    if (
+        not user_is_researcher(request.user)
+        and hasattr(image, "species_result")
+        and "human" in image.species_result.prediction.lower()
+    ):
+        raise Http404("Image not found")
+
     image_url = ensure_cached_image(image)
 
     species_result, _ = SpeciesNetResult.objects.get_or_create(image=image)

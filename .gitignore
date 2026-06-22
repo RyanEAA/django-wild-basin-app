@@ -15,4 +15,5 @@ __pycache__/
 *.JPG
 
 # Django media cache
+wildlife_viewer/media/
 media/

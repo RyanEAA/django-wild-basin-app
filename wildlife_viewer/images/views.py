@@ -36,44 +36,69 @@ def get_species_label_from_prediction(prediction):
         return parts[-1].strip()
     return prediction.strip()
 
+from django.http import JsonResponse
+
+
+def clean_species_label(label):
+    if not label:
+        return ""
+
+    label = str(label).strip()
+
+    if ";" in label:
+        parts = [part.strip() for part in label.split(";") if part.strip()]
+        if parts:
+            return parts[-1]
+
+    return label
+
+
 def species_search(request):
     query = request.GET.get("q", "").strip().lower()
-
+    seen = set()
     results = []
 
-    species_results = SpeciesNetResult.objects.exclude(
-        prediction=""
-    ).values_list("prediction", flat=True)
+    species_results = SpeciesNetResult.objects.all()
 
-    seen = set()
+    for result in species_results:
+        possible_labels = []
 
-    for prediction in species_results:
-        label = get_species_label_from_prediction(prediction)
+        if result.prediction:
+            possible_labels.append(clean_species_label(result.prediction))
 
-        if not label:
-            continue
+        for animal in result.animals or []:
+            if isinstance(animal, dict):
+                possible_labels.append(animal.get("label", ""))
+                possible_labels.append(clean_species_label(animal.get("taxonomy", "")))
 
-        label_lower = label.lower()
+        for label in possible_labels:
+            label = clean_species_label(label)
 
-        if query and query not in label_lower:
-            continue
+            if not label:
+                continue
 
-        if label_lower not in seen:
-            continue
+            label_lower = label.lower()
 
-        seen.add(label_lower)
+            if query and query not in label_lower:
+                continue
 
-        results.append({
-            "id": label,
-            "text": label,
-        })
+            if label_lower in seen:
+                continue
+
+            seen.add(label_lower)
+
+            results.append({
+                "id": label,
+                "text": label,
+            })
+
+            if len(results) >= 20:
+                break
 
         if len(results) >= 20:
             break
 
-    return JsonResponse({
-        "results": results
-    })
+    return JsonResponse({"results": results})
 
 @researcher_required
 def researcher_dashboard(request):

@@ -7,6 +7,8 @@ urlpatterns = [
     path("", views.gallery, name="gallery"),
     path("image/<str:file_id>/", views.image_detail, name="image_detail"),  
     
+    path("ajax/species-search/", views.species_search, name="species_search"),
+
     path("researcher/", views.researcher_dashboard, name="researcher_dashboard"),
     path("researcher/upload/", views.upload_metadata, name="upload_metadata"),
 

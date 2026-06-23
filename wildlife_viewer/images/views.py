@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import JsonResponse
 
 from .decorators import researcher_required
 from .forms import (
@@ -23,6 +24,56 @@ from .forms import (
 from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob
 
 from .services.box_cache import ensure_cached_image, check_box_token_status
+
+def get_species_label_from_prediction(prediction):
+    if not prediction:
+        return ""
+    
+    parts = prediction.split(";")
+
+    # SpeciesNet format often ends with readable label
+    if parts:
+        return parts[-1].strip()
+    return prediction.strip()
+
+def species_search(request):
+    query = request.GET.get("q", "").strip().lower()
+
+    results = []
+
+    species_results = SpeciesNetResult.objects.exclude(
+        prediction=""
+    ).values_list("prediction", flat=True)
+
+    seen = set()
+
+    for prediction in species_results:
+        label = get_species_label_from_prediction(prediction)
+
+        if not label:
+            continue
+
+        label_lower = label.lower()
+
+        if query and query not in label_lower:
+            continue
+
+        if label_lower not in seen:
+            continue
+
+        seen.add(label_lower)
+
+        results.append({
+            "id": label,
+            "text": label,
+        })
+
+        if len(results) >= 20:
+            break
+
+    return JsonResponse({
+        "results": results
+    })
 
 @researcher_required
 def researcher_dashboard(request):
@@ -169,10 +220,19 @@ def gallery(request):
             )
 
         if species:
-            images = images.filter(
-                Q(species_result__prediction__icontains=species)
-                | Q(species_result__animals__icontains=species)
-            )
+            selected_species = [
+                item.strip()
+                for item in species.split(",")
+                if item.strip()
+            ]
+
+            species_query = Q()
+
+            for species_name in selected_species:
+                species_query |= Q(species_result__prediction__icontains=species_name)
+                species_query |= Q(species_result__animals__icontains=species_name)
+
+            images = images.filter(species_query)
 
         if has_ocr:
             images = images.filter(ocr_result__isnull=False)

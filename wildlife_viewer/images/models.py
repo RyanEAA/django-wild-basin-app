@@ -96,6 +96,9 @@ class OCRResult(models.Model):
 
 
 class AppSettings(models.Model):
+    box_client_id = models.TextField(blank=True)
+    box_client_secret = models.TextField(blank=True)
+    
     box_access_token = models.TextField(blank=True)
     box_refresh_token = models.TextField(blank=True)
 

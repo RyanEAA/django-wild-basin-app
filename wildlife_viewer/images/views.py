@@ -287,11 +287,19 @@ def gallery(request):
             "image_url": image_url,
         })
 
+    query_params = request.GET.copy()
+
+    if "page" in query_params:
+        query_params.pop("page")
+
+    query_string = query_params.urlencode()
+
     return render(request, "images/gallery.html", {
         "form": form,
         "page_obj": page_obj,
         "image_cards": image_cards,
         "is_researcher": user_is_researcher(request.user),
+        "query_string": query_string,
     })
 
 def import_box_images(uploaded_file):

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings
+from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings, SpeciesLabel
 
 
 @admin.register(ImageRecord)
@@ -53,3 +53,9 @@ class ImportJobAdmin(admin.ModelAdmin):
 @admin.register(AppSettings)
 class AppSettingsAdmin(admin.ModelAdmin):
     list_display = ("updated_at",)
+
+@admin.register(SpeciesLabel)
+class SpeciesLabelAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_human", "count", "created_at")
+    search_fields = ("name",)
+    list_filter = ("is_human",)

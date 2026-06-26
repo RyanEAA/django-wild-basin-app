@@ -21,9 +21,17 @@ from .forms import (
     OCREditForm
 )
 
-from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob
+from .models import (
+    ImageRecord, SpeciesNetResult, OCRResult, ImportJob, SpeciesLabel
+)
 
 from .services.box_cache import ensure_cached_image, check_box_token_status
+
+from .services.importers import (
+    clean_species_label,
+    is_human_label,
+    update_species_labels
+)
 
 def get_species_label_from_prediction(prediction):
     if not prediction:
@@ -54,51 +62,26 @@ def clean_species_label(label):
 
 
 def species_search(request):
-    query = request.GET.get("q", "").strip().lower()
-    seen = set()
-    results = []
+    query = request.GET.get("q", "").strip()
 
-    species_results = SpeciesNetResult.objects.all()
+    labels = SpeciesLabel.objects.filter(
+        is_human=False
+    )
 
-    for result in species_results:
-        possible_labels = []
+    if query:
+        labels = labels.filter(name__icontains=query)
 
-        if result.prediction:
-            possible_labels.append(clean_species_label(result.prediction))
+    labels = labels.order_by("name")[:20]
 
-        for animal in result.animals or []:
-            if isinstance(animal, dict):
-                possible_labels.append(animal.get("label", ""))
-                possible_labels.append(clean_species_label(animal.get("taxonomy", "")))
-
-        for label in possible_labels:
-            label = clean_species_label(label)
-
-            if not label:
-                continue
-
-            label_lower = label.lower()
-
-            if query and query not in label_lower:
-                continue
-
-            if label_lower in seen:
-                continue
-
-            seen.add(label_lower)
-
-            results.append({
-                "id": label,
-                "text": label,
-            })
-
-            if len(results) >= 20:
-                break
-
-        if len(results) >= 20:
-            break
-
-    return JsonResponse({"results": results})
+    return JsonResponse({
+        "results": [
+            {
+                "id": label.name,
+                "text": f"{label.name} ({label.count})",
+            }
+            for label in labels
+        ]
+    })
 
 @researcher_required
 def researcher_dashboard(request):
@@ -354,7 +337,7 @@ def import_speciesnet_results(uploaded_file):
                 },
             )
 
-            _, created = SpeciesNetResult.objects.update_or_create(
+            species_results, created = SpeciesNetResult.objects.update_or_create(
                 image=image,
                 defaults={
                     "status": item.get("status", ""),
@@ -365,6 +348,8 @@ def import_speciesnet_results(uploaded_file):
                     "detections": item.get("detections", []),
                 },
             )
+
+            update_species_labels(species_results)
 
             if created:
                 created_count += 1

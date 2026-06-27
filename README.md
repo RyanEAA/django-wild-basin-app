@@ -385,35 +385,47 @@ University server
 # Running Locally
 
 Install dependencies
-
+```
 pip install -r requirements.txt
+```
 
 Run migrations
-
+```
 python manage.py makemigrations
 
 python manage.py migrate
+```
 
 Create superuser
-
+```
 python manage.py createsuperuser
+```
+
+Go to admin page and 
+- Create user
+- Create Researcher group
+- Assign user to Researcher group
 
 Run server
 
+```
 python manage.py runserver
+```
 
 Researcher dashboard
-
+```
 http://127.0.0.1:8000/researcher/
+```
 
 Gallery
-
+```
 http://127.0.0.1:8000/
+```
 
 Admin
-
+```
 http://127.0.0.1:8000/admin/
-
+```
 ---
 
 # Future Ideas

@@ -22,7 +22,12 @@ from .forms import (
 )
 
 from .models import (
-    ImageRecord, SpeciesNetResult, OCRResult, ImportJob, SpeciesLabel
+    ImageRecord, 
+    SpeciesNetResult, 
+    OCRResult, 
+    ImportJob, 
+    SpeciesDetection,
+    SpeciesLabel
 )
 
 from .services.box_cache import ensure_cached_image, check_box_token_status
@@ -30,7 +35,10 @@ from .services.box_cache import ensure_cached_image, check_box_token_status
 from .services.importers import (
     clean_species_label,
     is_human_label,
-    update_species_labels
+    update_species_labels,
+    import_box_images,
+    import_speciesnet_results,
+    import_ocr_results,
 )
 
 def get_species_label_from_prediction(prediction):
@@ -64,20 +72,30 @@ def clean_species_label(label):
 def species_search(request):
     query = request.GET.get("q", "").strip()
 
-    labels = SpeciesLabel.objects.filter(
-        is_human=False
+    detections = SpeciesDetection.objects.filter(
+        source="animal"
+    ).exclude(
+        label=""
     )
 
-    if query:
-        labels = labels.filter(name__icontains=query)
+    if not user_is_researcher(request.user):
+        detections = detections.exclude(label__icontains="human")
 
-    labels = labels.order_by("name")[:20]
+    if query:
+        detections = detections.filter(label__icontains=query)
+
+    labels = (
+        detections
+        .values_list("label", flat=True)
+        .distinct()
+        .order_by("label")[:20]
+    )
 
     return JsonResponse({
         "results": [
             {
-                "id": label.name,
-                "text": f"{label.name} ({label.count})",
+                "id": label,
+                "text": label,
             }
             for label in labels
         ]
@@ -199,13 +217,17 @@ def upload_metadata(request):
 def gallery(request):
     images = ImageRecord.objects.select_related(
         "species_result",
-        "ocr_result"
+        "ocr_result",
+    ).prefetch_related(
+        "species_result__species_detections",
     ).order_by("-created_at")
 
-    # hide images labeled as "human" in Species
-    images = images.exclude(
-        species_result__prediction__icontains="human"
-    )
+    # hide images labeled as "human" to non-researchers
+    if not user_is_researcher(request.user):
+        images = images.exclude(
+            species_result__species_detections__source="animal",
+            species_result__species_detections__label__icontains="human",
+        )
 
     form = GalleryFilterForm(request.GET)
 
@@ -224,8 +246,8 @@ def gallery(request):
                 | Q(file_id__icontains=search)
                 | Q(path__icontains=search)
                 | Q(ocr_result__ocr_texts__icontains=search)
-                | Q(species_result__prediction__icontains=search)
-            )
+                | Q(species_result__species_detections__label__icontains=search)
+            ).distinct()
 
         if species:
             selected_species = [
@@ -234,13 +256,10 @@ def gallery(request):
                 if item.strip()
             ]
 
-            species_query = Q()
-
-            for species_name in selected_species:
-                species_query |= Q(species_result__prediction__icontains=species_name)
-                species_query |= Q(species_result__animals__icontains=species_name)
-
-            images = images.filter(species_query)
+            images = images.filter(
+                species_result__species_detections__source="animal",
+                species_result__species_detections__label__in=selected_species,
+            ).distinct()
 
         if has_ocr:
             images = images.filter(ocr_result__isnull=False)
@@ -249,7 +268,10 @@ def gallery(request):
             images = images.filter(species_result__isnull=False)
 
         if min_score is not None:
-            images = images.filter(species_result__prediction_score__gte=min_score)
+            images = images.filter(
+                species_result__species_detections__source="animal",
+                species_result__species_detections__confidence__gte=min_score,
+            ).distinct()
 
         if start_date:
             images = images.filter(ocr_result__capture_date__gte=start_date)
@@ -285,122 +307,6 @@ def gallery(request):
         "query_string": query_string,
     })
 
-def import_box_images(uploaded_file):
-    data = json.load(uploaded_file)
-
-    created_count = 0
-    updated_count = 0
-    failed_count = 0
-
-    for item in data:
-        try:
-            _, created = ImageRecord.objects.update_or_create(
-                file_id=str(item["file_id"]),
-                defaults={
-                    "file_name": item.get("file_name", ""),
-                    "path": item.get("path", ""),
-                    "file_url": item.get("file_url", ""),
-                    "direct_download_url": item.get("direct_download_url", ""),
-                    "preview_url": item.get("preview_url", ""),
-                },
-            )
-
-            if created:
-                created_count += 1
-            else:
-                updated_count += 1
-
-        except Exception:
-            failed_count += 1
-
-    return created_count, updated_count, failed_count
-
-def import_speciesnet_results(uploaded_file):
-    created_count = 0
-    updated_count = 0
-    failed_count = 0
-
-    for raw_line in uploaded_file:
-        try:
-            line = raw_line.decode("utf-8").strip()
-
-            if not line:
-                continue
-
-            item = json.loads(line)
-
-            image, _ = ImageRecord.objects.get_or_create(
-                file_id=str(item["file_id"]),
-                defaults={
-                    "file_name": item.get("file_name", ""),
-                    "file_url": item.get("file_url", ""),
-                },
-            )
-
-            species_results, created = SpeciesNetResult.objects.update_or_create(
-                image=image,
-                defaults={
-                    "status": item.get("status", ""),
-                    "prediction": item.get("prediction", ""),
-                    "prediction_score": item.get("prediction_score"),
-                    "prediction_source": item.get("prediction_source", ""),
-                    "animals": item.get("animals", []),
-                    "detections": item.get("detections", []),
-                },
-            )
-
-            update_species_labels(species_results)
-
-            if created:
-                created_count += 1
-            else:
-                updated_count += 1
-
-        except Exception:
-            failed_count += 1
-
-    return created_count, updated_count, failed_count
-
-def import_ocr_results(uploaded_file):
-    created_count = 0
-    updated_count = 0
-    failed_count = 0
-
-    for raw_line in uploaded_file:
-        try:
-            line = raw_line.decode("utf-8").strip()
-
-            if not line:
-                continue
-
-            item = json.loads(line)
-
-            image, _ = ImageRecord.objects.get_or_create(
-                file_id=str(item["file_id"]),
-                defaults={
-                    "file_name": item.get("file_name", ""),
-                    "file_url": item.get("file_url", ""),
-                    "path": item.get("path", ""),
-                },
-            )
-
-            _, created = OCRResult.objects.update_or_create(
-                image=image,
-                defaults={
-                    "status": item.get("status", ""),
-                    "ocr_texts": item.get("ocr_texts", []),
-                },
-            )
-
-            if created:
-                created_count += 1
-            else:
-                updated_count += 1
-
-        except Exception:
-            failed_count += 1
-
-    return created_count, updated_count, failed_count
 
 def user_is_researcher(user):
     return (

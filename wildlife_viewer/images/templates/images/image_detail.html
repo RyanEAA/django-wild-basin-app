@@ -18,44 +18,99 @@
 
 <hr>
 
+{% if can_edit %}
+<form method="post">
+    {% csrf_token %}
+{% endif %}
+
 <h2>Current Metadata</h2>
 
 <p><strong>File ID:</strong> {{ image.file_id }}</p>
-<p><strong>Path:</strong> {{ image.path }}</p>
-<p><strong>Box URL:</strong> <a href="{{ image.file_url }}">{{ image.file_url }}</a></p>
+
+{% if can_edit %}
+    <p><strong>File Name:</strong> {{ image_form.file_name }}</p>
+    <p><strong>Path:</strong> {{ image_form.path }}</p>
+    <p><strong>File URL:</strong> {{ image_form.file_url }}</p>
+    <p><strong>Direct Download URL:</strong> {{ image_form.direct_download_url }}</p>
+    <p><strong>Preview URL:</strong> {{ image_form.preview_url }}</p>
+{% else %}
+    <p><strong>Path:</strong> {{ image.path }}</p>
+    <p><strong>Box URL:</strong> <a href="{{ image.file_url }}">{{ image.file_url }}</a></p>
+{% endif %}
+
+<hr>
 
 <h3>SpeciesNet</h3>
-<p><strong>Status:</strong> {{ species_result.status }}</p>
-<p><strong>Prediction:</strong> {{ species_result.prediction }}</p>
-<p><strong>Score:</strong> {{ species_result.prediction_score }}</p>
-<p><strong>Source:</strong> {{ species_result.prediction_source }}</p>
-<p><strong>Animals:</strong> {{ species_result.animals }}</p>
-<p><strong>Detections:</strong> {{ species_result.detections }}</p>
+
+{% if species_result %}
+    {% if can_edit %}
+        <p><strong>Status:</strong> {{ species_form.status }}</p>
+        <p><strong>Prediction:</strong> {{ species_form.prediction }}</p>
+        <p><strong>Score:</strong> {{ species_form.prediction_score }}</p>
+        <p><strong>Source:</strong> {{ species_form.prediction_source }}</p>
+        <p><strong>Animals JSON:</strong> {{ species_form.animals }}</p>
+        <p><strong>Detections JSON:</strong> {{ species_form.detections }}</p>
+    {% else %}
+        <p><strong>Status:</strong> {{ species_result.status }}</p>
+        <p><strong>Prediction:</strong> {{ species_result.prediction }}</p>
+        <p><strong>Score:</strong> {{ species_result.prediction_score }}</p>
+        <p><strong>Source:</strong> {{ species_result.prediction_source }}</p>
+    {% endif %}
+
+    <h4>Species Detections</h4>
+
+    <table border="1" cellpadding="6">
+        <tr>
+            <th>Source</th>
+            <th>Label</th>
+            <th>Confidence</th>
+            <th>BBox X</th>
+            <th>BBox Y</th>
+            <th>BBox W</th>
+            <th>BBox H</th>
+        </tr>
+
+        {% for detection in species_result.species_detections.all %}
+            <tr>
+                <td>{{ detection.source }}</td>
+                <td>{{ detection.label }}</td>
+                <td>{{ detection.confidence }}</td>
+                <td>{{ detection.bbox_x }}</td>
+                <td>{{ detection.bbox_y }}</td>
+                <td>{{ detection.bbox_width }}</td>
+                <td>{{ detection.bbox_height }}</td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="7">No SpeciesNet detections.</td>
+            </tr>
+        {% endfor %}
+    </table>
+{% else %}
+    <p>No SpeciesNet result.</p>
+{% endif %}
+
+<hr>
 
 <h3>OCR</h3>
-<p><strong>Status:</strong> {{ ocr_result.status }}</p>
-<p><strong>OCR Texts:</strong> {{ ocr_result.ocr_texts }}</p>
-<p><strong>Temperature:</strong> {{ ocr_result.temperature_f }}</p>
-<p><strong>Date:</strong> {{ ocr_result.capture_date }}</p>
-<p><strong>Time:</strong> {{ ocr_result.capture_time }}</p>
+
+{% if can_edit %}
+    <p><strong>Status:</strong> {{ ocr_form.status }}</p>
+    <p><strong>OCR Texts:</strong> {{ ocr_form.ocr_texts }}</p>
+    <p><strong>Temperature:</strong> {{ ocr_form.temperature_f }}</p>
+    <p><strong>Date:</strong> {{ ocr_form.capture_date }}</p>
+    <p><strong>Time:</strong> {{ ocr_form.capture_time }}</p>
+    <p><strong>DateTime:</strong> {{ ocr_form.capture_datetime }}</p>
+{% else %}
+    <p><strong>Status:</strong> {{ ocr_result.status }}</p>
+    <p><strong>OCR Texts:</strong> {{ ocr_result.ocr_texts }}</p>
+    <p><strong>Temperature:</strong> {{ ocr_result.temperature_f }}</p>
+    <p><strong>Date:</strong> {{ ocr_result.capture_date }}</p>
+    <p><strong>Time:</strong> {{ ocr_result.capture_time }}</p>
+{% endif %}
 
 {% if can_edit %}
     <hr>
-
-    <h2>Edit Metadata</h2>
-
-    <form method="post">
-        {% csrf_token %}
-
-        <h3>Image Record</h3>
-        {{ image_form.as_p }}
-
-        <h3>SpeciesNet Result</h3>
-        {{ species_form.as_p }}
-
-        <h3>OCR Result</h3>
-        {{ ocr_form.as_p }}
-
-        <button type="submit">Save Changes</button>
-    </form>
+    <button type="submit">Save Changes</button>
+</form>
 {% endif %}

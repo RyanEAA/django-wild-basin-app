@@ -1,6 +1,7 @@
 from django.contrib import admin
-from .models import ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings, SpeciesLabel
-
+from .models import (
+    ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings, SpeciesLabel, SpeciesDetection
+)
 
 @admin.register(ImageRecord)
 class ImageRecordAdmin(admin.ModelAdmin):
@@ -17,11 +18,30 @@ class ImageRecordAdmin(admin.ModelAdmin):
 class SpeciesNetResultAdmin(admin.ModelAdmin):
     list_display = (
         "image",
-        "prediction",
         "prediction_score",
         "prediction_source",
+        "status",
     )
     search_fields = ("image__file_name", "image__file_id", "prediction")
+
+@admin.register(SpeciesDetection)
+class SpeciesDetectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "species_result",
+        "source",
+        "label",
+        "confidence",
+        "bbox_x",
+        "bbox_y",
+        "bbox_width",
+        "bbox_height",
+    )
+    search_fields = (
+        "species_result__image__file_name",
+        "species_result__image__file_id",
+        "label",
+    )
+    list_filter = ("source", "label")
 
 
 @admin.register(OCRResult)

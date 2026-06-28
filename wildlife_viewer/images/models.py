@@ -64,10 +64,10 @@ class SpeciesNetResult(models.Model):
         related_name="species_result",
     )
 
-    status = models.CharField(max_length=50, blank=True)
-    prediction = models.TextField(blank=True)
+    status = models.CharField(max_length=50, blank=True, null=True)
+    prediction = models.TextField(blank=True, null=True)
     prediction_score = models.FloatField(null=True, blank=True)
-    prediction_source = models.CharField(max_length=255, blank=True)
+    prediction_source = models.CharField(max_length=255, blank=True, null=True)
 
     animals = models.JSONField(default=list, blank=True)
     detections = models.JSONField(default=list, blank=True)
@@ -94,6 +94,29 @@ class OCRResult(models.Model):
     def __str__(self):
         return f"OCRResult(image={self.image.file_id}, status={self.status})"
 
+class SpeciesDetection(models.Model):
+    SOURCE_CHOICES = [
+        ("animal", "Animal Classification"),
+        ("detection", "Detector Box"),
+    ]
+
+    species_result = models.ForeignKey(
+        SpeciesNetResult,
+        on_delete=models.CASCADE,
+        related_name="species_detections",
+    )
+
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES, db_index=True)
+    label = models.CharField(max_length=255, blank=True, db_index=True)
+    confidence = models.FloatField(null=True, blank=True, db_index=True)
+
+    bbox_x = models.FloatField(null=True, blank=True)
+    bbox_y = models.FloatField(null=True, blank=True)
+    bbox_width = models.FloatField(null=True, blank=True)
+    bbox_height = models.FloatField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.label} ({self.source})"
 
 class AppSettings(models.Model):
     box_client_id = models.TextField(blank=True)

@@ -232,9 +232,9 @@ def cache_image_ajax(request, file_id):
     })
 
 def gallery(request):
-    total_start = time.perf_counter()
+    #total_start = time.perf_counter()
 
-    t0 = time.perf_counter()
+    #t0 = time.perf_counter()
 
     images = ImageRecord.objects.select_related(
         "species_result",
@@ -243,15 +243,14 @@ def gallery(request):
         "species_result__species_detections",
     ).order_by("-created_at")
 
-    print(f"Querying images took {time.perf_counter() - t0:.4f} seconds")
+    #print(f"Querying images took {time.perf_counter() - t0:.4f} seconds")
 
     if not user_is_researcher(request.user):
         images = images.exclude(
-            species_result__species_detections__source="animal",
-            species_result__species_detections__label__icontains="human",
+            species_result__prediction__icontains="human"
         )
 
-    t1 = time.perf_counter()
+    #t1 = time.perf_counter()
 
     form = GalleryFilterForm(request.GET)
 
@@ -303,16 +302,16 @@ def gallery(request):
         if end_date:
             images = images.filter(ocr_result__capture_date__lte=end_date)
 
-    print(f"Filtering images took {time.perf_counter() - t1:.4f} seconds")
+    #print(f"Filtering images took {time.perf_counter() - t1:.4f} seconds")
 
-    t2 = time.perf_counter()
+    #t2 = time.perf_counter()
 
     paginator = Paginator(images, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    print(f"Pagination took {time.perf_counter() - t2:.4f} seconds")
+    #print(f"Pagination took {time.perf_counter() - t2:.4f} seconds")
 
-    t3 = time.perf_counter()
+    #t3 = time.perf_counter()
 
     image_cards = []
 
@@ -324,8 +323,8 @@ def gallery(request):
             "image_url": image_url,
         })
 
-    print(f"Creating image cards took {time.perf_counter() - t3:.4f} seconds")
-    print(f"Total gallery view took {time.perf_counter() - total_start:.4f} seconds")
+    #print(f"Creating image cards took {time.perf_counter() - t3:.4f} seconds")
+    #print(f"Total gallery view took {time.perf_counter() - total_start:.4f} seconds")
 
     query_params = request.GET.copy()
     query_params.pop("page", None)

@@ -1,15 +1,14 @@
 from django.shortcuts import render
-
+import time
 # Create your views here.
 import json
 
-from django.http import Http404
+from django.http import Http404, JsonResponse
 
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import JsonResponse
 
 from .decorators import researcher_required
 from .forms import (
@@ -30,7 +29,9 @@ from .models import (
     SpeciesLabel
 )
 
-from .services.box_cache import ensure_cached_image, check_box_token_status
+from .services.box_cache import (
+    ensure_cached_image, check_box_token_status
+)
 
 from .services.importers import (
     clean_species_label,
@@ -214,7 +215,27 @@ def upload_metadata(request):
         "ocr_coverage": ocr_coverage,
     })
 
+def cache_image_ajax(request, file_id):
+    image = get_object_or_404(ImageRecord, file_id=file_id)
+
+    image_url = ensure_cached_image(image)
+
+    if image_url:
+        return JsonResponse({
+            "ok": True,
+            "image_url": image_url,
+        })
+    
+    return JsonResponse({
+        "ok": False,
+        "image_url": None,
+    })
+
 def gallery(request):
+    total_start = time.perf_counter()
+
+    t0 = time.perf_counter()
+
     images = ImageRecord.objects.select_related(
         "species_result",
         "ocr_result",
@@ -222,12 +243,15 @@ def gallery(request):
         "species_result__species_detections",
     ).order_by("-created_at")
 
-    # hide images labeled as "human" to non-researchers
+    print(f"Querying images took {time.perf_counter() - t0:.4f} seconds")
+
     if not user_is_researcher(request.user):
         images = images.exclude(
             species_result__species_detections__source="animal",
             species_result__species_detections__label__icontains="human",
         )
+
+    t1 = time.perf_counter()
 
     form = GalleryFilterForm(request.GET)
 
@@ -279,24 +303,32 @@ def gallery(request):
         if end_date:
             images = images.filter(ocr_result__capture_date__lte=end_date)
 
+    print(f"Filtering images took {time.perf_counter() - t1:.4f} seconds")
+
+    t2 = time.perf_counter()
+
     paginator = Paginator(images, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
+
+    print(f"Pagination took {time.perf_counter() - t2:.4f} seconds")
+
+    t3 = time.perf_counter()
 
     image_cards = []
 
     for image in page_obj:
-        image_url = ensure_cached_image(image)
+        image_url = image.cached_image.url if image.cached_image else None
 
         image_cards.append({
             "image": image,
             "image_url": image_url,
         })
 
+    print(f"Creating image cards took {time.perf_counter() - t3:.4f} seconds")
+    print(f"Total gallery view took {time.perf_counter() - total_start:.4f} seconds")
+
     query_params = request.GET.copy()
-
-    if "page" in query_params:
-        query_params.pop("page")
-
+    query_params.pop("page", None)
     query_string = query_params.urlencode()
 
     return render(request, "images/gallery.html", {

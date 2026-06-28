@@ -12,6 +12,8 @@ urlpatterns = [
     path("researcher/", views.researcher_dashboard, name="researcher_dashboard"),
     path("researcher/upload/", views.upload_metadata, name="upload_metadata"),
 
-]
+    path("ajax/cache-image/<str:file_id>/", views.cache_image_ajax, name="cache_image_ajax")
+    
+    ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

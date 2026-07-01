@@ -8,26 +8,57 @@
 <body>
 
 <header class="site-header">
-    <div class="brand">
-        <div class="brand-logo">WB</div>
-        <div>
-            <h1>WILD BASIN</h1>
-            <p>Wilderness Preserve</p>
-        </div>
+    <a href="{% url 'gallery' %}" class="brand">
+        <img
+            src="{% static 'images/img/wild-basin-hero.jpg' %}"
+            alt="Wild Basin / St. Edward's University"
+            class="brand-image"
+        >
+    </a>
 
-        <div class="divider"></div>
+   <nav class="site-nav">
+        <a href="{% url 'gallery' %}"
+        class="{% if request.resolver_match.url_name == 'gallery' %}active{% endif %}">
+            Image Gallery
+        </a>
 
-        <div>
-            <h1>ST. EDWARD’S UNIVERSITY</h1>
-            <p>Wild Basin Creative Research Center</p>
-        </div>
-    </div>
+        <a href="#"
+        class="{% if request.resolver_match.url_name == 'about' %}active{% endif %}">
+            About Wild Basin
+        </a>
 
-    <nav>
-        <a href="{% url 'gallery' %}">Image Gallery</a>
-        <a href="#">About Wild Basin</a>
-        <a href="#">Research</a>
-        <a href="#">Contact</a>
+        <a href="#"
+        class="{% if request.resolver_match.url_name == 'research' %}active{% endif %}">
+            Research
+        </a>
+
+        <a href="#"
+        class="{% if request.resolver_match.url_name == 'contact' %}active{% endif %}">
+            Contact
+        </a>
+
+        {% if user.is_authenticated %}
+
+            {% if user.is_superuser or user.groups.exists %}
+                <a href="{% url 'researcher_dashboard' %}"
+                class="{% if request.resolver_match.url_name == 'researcher_dashboard' or request.resolver_match.url_name == 'upload_metadata' %}active{% endif %}">
+                    Dashboard
+                </a>
+            {% endif %}
+
+            <form method="post" action="{% url 'logout' %}" class="logout-form">
+                {% csrf_token %}
+                <button type="submit">Logout</button>
+            </form>
+
+        {% else %}
+
+            <a href="{% url 'login' %}"
+            class="{% if request.resolver_match.url_name == 'login' %}active{% endif %}">
+                Login
+            </a>
+
+        {% endif %}
     </nav>
 </header>
 

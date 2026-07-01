@@ -26,32 +26,16 @@ body {
 }
 
 .brand {
+    margin-left: 0;
     display: flex;
     align-items: center;
-    gap: 18px;
+    text-decoration: none;
 }
 
-.brand-logo {
-    width: 52px;
-    height: 52px;
-    border-radius: 6px;
-    background: var(--green);
-    color: white;
-    display: grid;
-    place-items: center;
-    font-weight: bold;
-}
-
-.brand h1 {
-    font-size: 24px;
-    margin: 0;
-    letter-spacing: 1px;
-}
-
-.brand p {
-    margin: 2px 0 0;
-    font-size: 13px;
-    font-weight: bold;
+.brand-image {
+    height: 76px;
+    width: auto;
+    display: block;
 }
 
 .divider {
@@ -60,29 +44,51 @@ body {
     background: var(--border);
 }
 
-.site-header nav {
-    display: flex;
-    gap: 36px;
-}
-
-.site-header nav a {
+.site-nav a {
     text-decoration: none;
     color: var(--navy);
     font-weight: 700;
-    padding-bottom: 8px;
+    padding: 8px 0;
+    position: relative;
+    transition: color .2s ease;
 }
 
-.site-header nav a:hover {
+.site-nav a:hover {
     color: var(--green);
-    border-bottom: 3px solid var(--green);
+}
+
+.site-nav a.active {
+    color: var(--green);
+}
+
+.site-nav a.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -12px;
+
+    height: 3px;
+    background: var(--green);
+    border-radius: 3px;
+}
+
+.site-header {
+    height: 92px;
+    padding: 0 32px 0 0;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .hero {
     background: linear-gradient(rgba(15,45,70,.75), rgba(15,45,70,.75)),
-                url("/static/images/img/wild-basin-hero.jpg");
+                url("/static/images/img/hero.avif");
     background-size: cover;
     background-position: center;
-    color: white;
+    color: #fefefe;
     padding: 42px 88px;
 }
 
@@ -219,4 +225,23 @@ input, select {
 .site-footer p {
     color: #d7e2ec;
     line-height: 1.6;
+}
+
+.logout-form {
+    margin: 0;
+}
+
+.logout-form button {
+    background: none;
+    border: none;
+    color: var(--navy);
+    font-weight: 700;
+    cursor: pointer;
+    font: inherit;
+    padding-bottom: 8px;
+}
+
+.logout-form button:hover {
+    color: var(--green);
+    border-bottom: 3px solid var(--green);
 }

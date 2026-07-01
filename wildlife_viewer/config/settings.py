@@ -47,6 +47,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_REDIRECT_URL = "researcher_dashboard"
 LOGOUT_REDIRECT_URL = "gallery"
 
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [
+    BASE_DIR / "images" / "static",
+]
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

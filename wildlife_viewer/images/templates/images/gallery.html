@@ -1,95 +1,97 @@
-<h1>Image Gallery</h1>
+{% extends "base.html" %}
+
+{% block hero %}
+<section class="hero">
+    <h1>Image Gallery</h1>
+    <p>Explore trail camera images captured across Wild Basin Wilderness Preserve.</p>
+</section>
+{% endblock %}
+
+{% block content %}
 
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-<form method="get">
-    <p>
-        <label for="id_search">Search:</label>
-        {{ form.search }}
-    </p>
+<form method="get" class="card filter-card">
+    <h2>Filter Images</h2>
 
-    <p>
-        <label for="species-select">Species:</label><br>
-        <select id="species-select" multiple="multiple" style="width: 400px;"></select>
-        {{ form.species }}
-    </p>
+    <div class="filter-grid">
+        <div>
+            <label>Search</label><br>
+            {{ form.search }}
+        </div>
 
-    <p><label>Has OCR:</label> {{ form.has_ocr }}</p>
-    <p><label>Has SpeciesNet:</label> {{ form.has_speciesnet }}</p>
-    <p><label>Minimum Score:</label> {{ form.min_score }}</p>
-    <p><label>Start Date:</label> {{ form.start_date }}</p>
-    <p><label>End Date:</label> {{ form.end_date }}</p>
+        <div>
+            <label>Species</label><br>
+            <select id="species-select" multiple="multiple" style="width:100%;"></select>
+            {{ form.species }}
+        </div>
 
-    <button type="submit">Filter</button>
-    <a href="{% url 'gallery' %}">Clear filters</a>
+        <div>
+            <label>{{ form.has_ocr }} Has OCR</label><br>
+            <label>{{ form.has_speciesnet }} Has SpeciesNet</label>
+        </div>
+
+        <div>
+            <label>Minimum Score</label><br>
+            {{ form.min_score }}
+        </div>
+
+        <div>
+            <label>Date Range</label><br>
+            {{ form.start_date }} to {{ form.end_date }}
+        </div>
+    </div>
+
+    <br>
+    <button class="btn-primary" type="submit">Apply Filters</button>
+    <a class="btn-link" href="{% url 'gallery' %}">Clear Filters</a>
 </form>
 
-<hr>
-
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+<div class="gallery-grid">
     {% for card in image_cards %}
-        <a href="{% url 'image_detail' card.image.file_id %}" style="text-decoration: none; color: black;">
-            <div style="border: 1px solid #ccc; padding: 10px; border-radius: 8px;">
-                {% if card.image_url %}
-                    <img
-                        src="{{ card.image_url }}"
-                        style="width: 100%; height: 180px; object-fit: cover;"
-                    >
-                {% else %}
-                    <div
-                        class="image-placeholder"
-                        data-file-id="{{ card.image.file_id }}"
-                        style="height: 180px; background: #eee; display: flex; align-items: center; justify-content: center;"
-                    >
-                        Loading image...
-                    </div>
-                {% endif %}
+        <a href="{% url 'image_detail' card.image.file_id %}" class="card image-card">
+            {% if card.image_url %}
+                <img src="{{ card.image_url }}">
+            {% else %}
+                <div class="image-placeholder" data-file-id="{{ card.image.file_id }}">
+                    Loading image...
+                </div>
+            {% endif %}
 
+            <div class="image-card-body">
                 <h3>{{ card.image.file_name }}</h3>
 
-                <p>
-                    <strong>Path:</strong>
-                    {{ card.image.path|truncatechars:60 }}
-                </p>
+                <p class="meta-line">📍 {{ card.image.path|truncatechars:70 }}</p>
 
                 {% if card.image.species_result %}
-                    <p>
-                        <strong>Score:</strong>
-                        {{ card.image.species_result.prediction_score|floatformat:3 }}
-                    </p>
+                    <p><strong>Score:</strong> {{ card.image.species_result.prediction_score|floatformat:3 }}</p>
 
-                    <p><strong>Animal Classifications:</strong></p>
-                    <ul>
-                        {% for detection in card.image.species_result.species_detections.all %}
-                            {% if detection.source == "animal" %}
-                                <li>
-                                    {{ detection.label }}
-                                    {% if detection.confidence %}
-                                        — {{ detection.confidence|floatformat:3 }}
-                                    {% endif %}
-                                </li>
-                            {% endif %}
-                        {% empty %}
-                            <li>No classified animals.</li>
-                        {% endfor %}
-                    </ul>
+                    {% for detection in card.image.species_result.species_detections.all %}
+                        {% if detection.source == "animal" %}
+                            <span class="badge">
+                                {{ detection.label }}
+                                {% if detection.confidence %}
+                                    {{ detection.confidence|floatformat:2 }}
+                                {% endif %}
+                            </span>
+                        {% endif %}
+                    {% empty %}
+                        <p>No classified animals.</p>
+                    {% endfor %}
                 {% else %}
                     <p>No SpeciesNet result.</p>
                 {% endif %}
 
                 {% if card.image.ocr_result %}
-                    <p>
-                        <strong>OCR:</strong>
-                        {{ card.image.ocr_result.ocr_texts|join:", "|truncatechars:80 }}
+                    <p class="meta-line">
+                        {{ card.image.ocr_result.capture_date|default:"No date" }}
+                        ·
+                        {{ card.image.ocr_result.temperature_f|default:"—" }} °F
                     </p>
-
-                    <p><strong>Date:</strong> {{ card.image.ocr_result.capture_date }}</p>
-                    <p><strong>Temp:</strong> {{ card.image.ocr_result.temperature_f }} °F</p>
                 {% else %}
-                    <p>No OCR result.</p>
+                    <p class="meta-line">No OCR result</p>
                 {% endif %}
             </div>
         </a>
@@ -98,88 +100,76 @@
     {% endfor %}
 </div>
 
-<hr>
-
-<div>
+<div class="pagination">
     {% if page_obj.has_previous %}
-        <a href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">
-            Previous
-        </a>
+        <a href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">← Previous</a>
     {% endif %}
 
     <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
 
     {% if page_obj.has_next %}
-        <a href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">
-            Next
-        </a>
+        <a href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
     {% endif %}
 </div>
 
 <script>
-    $(document).ready(function () {
-        const speciesInput = $("#id_species");
-        const speciesSelect = $("#species-select");
+$(document).ready(function () {
+    const speciesInput = $("#id_species");
+    const speciesSelect = $("#species-select");
 
-        speciesSelect.select2({
-            placeholder: "Search species...",
-            ajax: {
-                url: "{% url 'species_search' %}",
-                dataType: "json",
-                delay: 250,
-                data: function (params) {
-                    return { q: params.term || "" };
-                },
-                processResults: function (data) {
-                    return data;
-                }
+    speciesSelect.select2({
+        placeholder: "Search species...",
+        ajax: {
+            url: "{% url 'species_search' %}",
+            dataType: "json",
+            delay: 250,
+            data: function (params) {
+                return { q: params.term || "" };
             },
-            tags: true
-        });
-
-        speciesSelect.on("change", function () {
-            const selected = speciesSelect.val() || [];
-            speciesInput.val(selected.join(","));
-        });
-
-        const existingSpecies = speciesInput.val();
-
-        if (existingSpecies) {
-            existingSpecies.split(",").forEach(function (species) {
-                const option = new Option(species, species, true, true);
-                speciesSelect.append(option);
-            });
-
-            speciesSelect.trigger("change");
-        }
+            processResults: function (data) {
+                return data;
+            }
+        },
+        tags: true
     });
+
+    speciesSelect.on("change", function () {
+        speciesInput.val((speciesSelect.val() || []).join(","));
+    });
+
+    const existingSpecies = speciesInput.val();
+
+    if (existingSpecies) {
+        existingSpecies.split(",").forEach(function (species) {
+            speciesSelect.append(new Option(species, species, true, true));
+        });
+
+        speciesSelect.trigger("change");
+    }
+});
 </script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const placeholders = document.querySelectorAll(".image-placeholder");
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".image-placeholder").forEach(function (placeholder) {
+        const fileId = placeholder.dataset.fileId;
 
-        placeholders.forEach(function (placeholder) {
-            const fileId = placeholder.dataset.fileId;
-
-            fetch(`/ajax/cache-image/${fileId}/`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.ok && data.image_url) {
-                        const img = document.createElement("img");
-                        img.src = data.image_url;
-                        img.style.width = "100%";
-                        img.style.height = "180px";
-                        img.style.objectFit = "cover";
-
-                        placeholder.replaceWith(img);
-                    } else {
-                        placeholder.textContent = "Image unavailable";
-                    }
-                })
-                .catch(() => {
+        fetch(`/ajax/cache-image/${fileId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok && data.image_url) {
+                    const img = document.createElement("img");
+                    img.src = data.image_url;
+                    placeholder.replaceWith(img);
+                } else {
                     placeholder.textContent = "Image unavailable";
-                });
-        });
+                }
+            })
+            .catch(() => {
+                placeholder.textContent = "Image unavailable";
+            });
     });
+});
 </script>
+
+{% endblock %}

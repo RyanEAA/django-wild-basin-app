@@ -1,0 +1,222 @@
+:root {
+    --navy: #0f2d46;
+    --green: #2f7d3f;
+    --blue: #2f6690;
+    --cream: #faf8f4;
+    --border: #d9dee5;
+    --text: #102a43;
+    --muted: #607087;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    color: var(--text);
+    background: var(--cream);
+}
+
+.site-header {
+    height: 92px;
+    padding: 0 88px;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.brand-logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    background: var(--green);
+    color: white;
+    display: grid;
+    place-items: center;
+    font-weight: bold;
+}
+
+.brand h1 {
+    font-size: 24px;
+    margin: 0;
+    letter-spacing: 1px;
+}
+
+.brand p {
+    margin: 2px 0 0;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.divider {
+    height: 52px;
+    width: 1px;
+    background: var(--border);
+}
+
+.site-header nav {
+    display: flex;
+    gap: 36px;
+}
+
+.site-header nav a {
+    text-decoration: none;
+    color: var(--navy);
+    font-weight: 700;
+    padding-bottom: 8px;
+}
+
+.site-header nav a:hover {
+    color: var(--green);
+    border-bottom: 3px solid var(--green);
+}
+
+.hero {
+    background: linear-gradient(rgba(15,45,70,.75), rgba(15,45,70,.75)),
+                url("/static/images/img/wild-basin-hero.jpg");
+    background-size: cover;
+    background-position: center;
+    color: white;
+    padding: 42px 88px;
+}
+
+.hero h1 {
+    font-family: Georgia, serif;
+    font-size: 42px;
+    margin: 0 0 10px;
+}
+
+.hero p {
+    font-size: 18px;
+    margin: 0;
+}
+
+.page-container {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 28px;
+}
+
+.card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.05);
+}
+
+.filter-card {
+    padding: 24px;
+    margin-bottom: 16px;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1.5fr;
+    gap: 20px;
+    align-items: end;
+}
+
+input, select {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.btn-primary {
+    background: var(--navy);
+    color: white;
+    padding: 11px 18px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-link {
+    color: var(--blue);
+    text-decoration: none;
+    font-weight: bold;
+    margin-left: 18px;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+}
+
+.image-card {
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--text);
+}
+
+.image-card img,
+.image-placeholder {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    background: #e9edf2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-card-body {
+    padding: 14px;
+}
+
+.image-card h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+}
+
+.meta-line {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 6px 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #e5f3e8;
+    color: var(--green);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.pagination {
+    margin: 28px 0;
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+}
+
+.pagination a {
+    color: var(--navy);
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.site-footer {
+    background: var(--navy);
+    color: white;
+    padding: 42px 88px;
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    gap: 60px;
+    margin-top: 40px;
+}
+
+.site-footer p {
+    color: #d7e2ec;
+    line-height: 1.6;
+}

@@ -1,0 +1,58 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wild Basin Image Gallery</title>
+<link rel="stylesheet" href="{% static 'images/css/site.css' %}"></head>
+<body>
+
+<header class="site-header">
+    <div class="brand">
+        <div class="brand-logo">WB</div>
+        <div>
+            <h1>WILD BASIN</h1>
+            <p>Wilderness Preserve</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+            <h1>ST. EDWARD’S UNIVERSITY</h1>
+            <p>Wild Basin Creative Research Center</p>
+        </div>
+    </div>
+
+    <nav>
+        <a href="{% url 'gallery' %}">Image Gallery</a>
+        <a href="#">About Wild Basin</a>
+        <a href="#">Research</a>
+        <a href="#">Contact</a>
+    </nav>
+</header>
+
+{% block hero %}{% endblock %}
+
+<main class="page-container">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+    <div>
+        <h2>WILD BASIN</h2>
+        <p>Wild Basin Wilderness Preserve is a natural area managed by St. Edward's University for research, education, and conservation.</p>
+    </div>
+
+    <div>
+        <h3>Wild Basin Creative Research Center</h3>
+        <p>St. Edward's University<br>3001 S. Congress Ave.<br>Austin, TX 78704</p>
+    </div>
+
+    <div>
+        <h3>Quick Links</h3>
+        <p>About Wild Basin<br>Research<br>Contact</p>
+    </div>
+</footer>
+
+</body>
+</html>

@@ -1,104 +1,127 @@
-<h1>Upload Metadata</h1>
+{% extends "base.html" %}
 
-<h2>Current Database Status</h2>
+{% block hero %}
+<section class="hero">
+    <h1>Upload Metadata</h1>
+    <p>Upload and manage metadata for trail camera images and analysis results.</p>
+</section>
+{% endblock %}
 
-<ul>
-    <li>Box Images: {{ box_count }}</li>
-    <li>SpeciesNet Results: {{ speciesnet_count }} — {{ speciesnet_coverage }}%</li>
-    <li>OCR Results: {{ ocr_count }} — {{ ocr_coverage }}%</li>
-    <li>Import Jobs: {{ import_job_count }}</li>
-</ul>
+{% block content %}
+<div class="content-page">
 
-<h2>Recent Uploads</h2>
+    <section class="content-card">
+        <h2>Current Database Status</h2>
 
-<table border="1" cellpadding="6">
-    <tr>
-        <th>File Type</th>
-        <th>Filename</th>
-        <th>Created</th>
-        <th>Updated</th>
-        <th>Failed</th>
-        <th>Uploaded At</th>
-    </tr>
+        <div class="stat-grid">
+            <div class="stat-box">
+                <div class="stat-number">{{ box_count }}</div>
+                <p>Box Images</p>
+            </div>
 
-    {% for job in recent_jobs %}
-        <tr>
-            <td>{{ job.file_type }}</td>
-            <td>{{ job.filename }}</td>
-            <td>{{ job.records_created }}</td>
-            <td>{{ job.records_updated }}</td>
-            <td>{{ job.records_failed }}</td>
-            <td>{{ job.uploaded_at }}</td>
-        </tr>
-    {% empty %}
-        <tr>
-            <td colspan="6">No uploads yet.</td>
-        </tr>
-    {% endfor %}
-</table>
+            <div class="stat-box">
+                <div class="stat-number">{{ speciesnet_count }}</div>
+                <p>SpeciesNet Results — {{ speciesnet_coverage }}%</p>
+            </div>
 
-<hr>
+            <div class="stat-box">
+                <div class="stat-number">{{ ocr_count }}</div>
+                <p>OCR Results — {{ ocr_coverage }}%</p>
+            </div>
 
-{% if messages %}
-    {% for message in messages %}
-        <p><strong>{{ message }}</strong></p>
-    {% endfor %}
-{% endif %}
+            <div class="stat-box">
+                <div class="stat-number">{{ import_job_count }}</div>
+                <p>Import Jobs</p>
+            </div>
+        </div>
+    </section>
 
-<hr>
+    <section class="content-card">
+        <h2>Recent Uploads</h2>
 
-<h2>1. Upload Box Image Metadata JSON</h2>
+        <table class="clean-table">
+            <tr>
+                <th>File Type</th>
+                <th>Filename</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th>Failed</th>
+                <th>Uploaded At</th>
+            </tr>
 
-<p>
-    Use this for the JSON file that contains file names, Box file IDs,
-    paths, file URLs, direct download URLs, and preview URLs.
-</p>
+            {% for job in recent_jobs %}
+                <tr>
+                    <td><span class="badge">{{ job.file_type }}</span></td>
+                    <td>{{ job.filename }}</td>
+                    <td>{{ job.records_created }}</td>
+                    <td>{{ job.records_updated }}</td>
+                    <td>{{ job.records_failed }}</td>
+                    <td>{{ job.uploaded_at }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">No uploads yet.</td>
+                </tr>
+            {% endfor %}
+        </table>
 
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <input type="hidden" name="upload_type" value="box_images">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert success">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    </section>
 
-    {{ box_form.as_p }}
+    <section class="upload-grid">
+        <div class="content-card upload-card">
+            <h2>1. Upload Box Image Metadata JSON</h2>
+            <p>
+                Use this for the JSON file that contains file names, Box file IDs,
+                paths, file URLs, direct download URLs, and preview URLs.
+            </p>
 
-    <button type="submit">Upload Box Image Metadata</button>
-</form>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="upload_type" value="box_images">
+                {{ box_form.as_p }}
+                <button class="btn-primary" type="submit">Upload Box Image Metadata</button>
+            </form>
+        </div>
 
-<hr>
+        <div class="content-card upload-card">
+            <h2>2. Upload SpeciesNet Results JSONL</h2>
+            <p>
+                Use this for the SpeciesNet output file where each line is one JSON object.
+            </p>
 
-<h2>2. Upload SpeciesNet Results JSONL</h2>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="upload_type" value="speciesnet">
+                {{ speciesnet_form.as_p }}
+                <button class="btn-primary" type="submit">Upload SpeciesNet Results</button>
+            </form>
+        </div>
 
-<p>
-    Use this for the SpeciesNet output file where each line is one JSON object.
-</p>
+        <div class="content-card upload-card">
+            <h2>3. Upload PaddleOCR Results JSONL</h2>
+            <p>
+                Use this for the OCR output file where each line contains OCR text metadata.
+            </p>
 
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <input type="hidden" name="upload_type" value="speciesnet">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="upload_type" value="ocr">
+                {{ ocr_form.as_p }}
+                <button class="btn-primary" type="submit">Upload OCR Results</button>
+            </form>
+        </div>
+    </section>
 
-    {{ speciesnet_form.as_p }}
+    <p>
+        <a class="button-link" href="{% url 'researcher_dashboard' %}">
+            ← Back to researcher dashboard
+        </a>
+    </p>
 
-    <button type="submit">Upload SpeciesNet Results</button>
-</form>
-
-<hr>
-
-<h2>3. Upload PaddleOCR Results JSONL</h2>
-
-<p>
-    Use this for the OCR output file where each line contains OCR text metadata.
-</p>
-
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <input type="hidden" name="upload_type" value="ocr">
-
-    {{ ocr_form.as_p }}
-
-    <button type="submit">Upload OCR Results</button>
-</form>
-
-<hr>
-
-<p>
-    <a href="{% url 'researcher_dashboard' %}">Back to researcher dashboard</a>
-</p>
+</div>
+{% endblock %}

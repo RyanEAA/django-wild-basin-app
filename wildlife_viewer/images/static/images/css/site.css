@@ -316,3 +316,152 @@ input, select {
     color: var(--blue);
     font-weight: bold;
 }
+
+.detail-page {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.detail-header h1 {
+    margin: 0;
+    font-size: 28px;
+    color: var(--navy);
+}
+
+.detail-layout {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.7fr 1fr;
+    gap: 24px;
+}
+
+.detail-image {
+    width: 100%;
+    max-height: 620px;
+    object-fit: contain;
+    background: black;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+
+.image-placeholder.large {
+    height: 520px;
+    border-radius: 10px;
+}
+
+.detail-card {
+    padding: 24px;
+}
+
+.detail-card h2 {
+    font-size: 20px;
+    margin-top: 0;
+    color: var(--navy);
+}
+
+.meta-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    margin: 14px 0;
+    align-items: start;
+}
+
+.meta-row strong {
+    color: var(--navy);
+}
+
+.meta-row input,
+.meta-row textarea,
+.meta-row select {
+    width: 100%;
+}
+
+.clean-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.clean-table th,
+.clean-table td {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.clean-table th {
+    background: #f3f6f8;
+    color: var(--navy);
+}
+
+.clean-table tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.alert {
+    padding: 14px 16px;
+    border-radius: 8px;
+    margin: 16px 0;
+    border: 1px solid var(--border);
+    font-weight: 700;
+}
+
+.alert.success {
+    background: #eef8f0;
+    color: #24733a;
+    border-color: #b8dfc2;
+}
+
+.alert.warning {
+    background: #fff7e8;
+    color: #9a5a00;
+    border-color: #f2d39b;
+}
+
+.save-bar {
+    margin-top: 24px;
+    text-align: right;
+}
+
+.upload-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+.upload-card h2 {
+    font-size: 24px;
+}
+
+.dashboard-link {
+    text-decoration: none;
+    color: var(--text);
+    display: block;
+}
+
+.dashboard-link:hover {
+    border-color: var(--green);
+    transform: translateY(-2px);
+}
+
+.login-page {
+    max-width: 520px;
+}
+
+.login-card input {
+    width: 100%;
+}

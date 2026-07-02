@@ -1,116 +1,150 @@
-<h1>{{ image.file_name }}</h1>
+{% extends "base.html" %}
 
-<p>
-    <a href="{% url 'gallery' %}">Back to gallery</a>
-</p>
+{% block content %}
+<div class="detail-page">
 
-{% if messages %}
-    {% for message in messages %}
-        <p><strong>{{ message }}</strong></p>
-    {% endfor %}
-{% endif %}
+    <p>
+        <a class="btn-link" href="{% url 'gallery' %}">← Back to gallery</a>
+    </p>
 
-{% if image_url %}
-    <img src="{{ image_url }}" style="max-width: 800px; width: 100%;">
-{% else %}
-    <p>No cached image available. Check Box token or direct download URL.</p>
-{% endif %}
-
-<hr>
-
-{% if can_edit %}
-<form method="post">
-    {% csrf_token %}
-{% endif %}
-
-<h2>Current Metadata</h2>
-
-<p><strong>File ID:</strong> {{ image.file_id }}</p>
-
-{% if can_edit %}
-    <p><strong>File Name:</strong> {{ image_form.file_name }}</p>
-    <p><strong>Path:</strong> {{ image_form.path }}</p>
-    <p><strong>File URL:</strong> {{ image_form.file_url }}</p>
-    <p><strong>Direct Download URL:</strong> {{ image_form.direct_download_url }}</p>
-    <p><strong>Preview URL:</strong> {{ image_form.preview_url }}</p>
-{% else %}
-    <p><strong>Path:</strong> {{ image.path }}</p>
-    <p><strong>Box URL:</strong> <a href="{{ image.file_url }}">{{ image.file_url }}</a></p>
-{% endif %}
-
-<hr>
-
-<h3>SpeciesNet</h3>
-
-{% if species_result %}
-    {% if can_edit %}
-        <p><strong>Status:</strong> {{ species_form.status }}</p>
-        <p><strong>Prediction:</strong> {{ species_form.prediction }}</p>
-        <p><strong>Score:</strong> {{ species_form.prediction_score }}</p>
-        <p><strong>Source:</strong> {{ species_form.prediction_source }}</p>
-        <p><strong>Animals JSON:</strong> {{ species_form.animals }}</p>
-        <p><strong>Detections JSON:</strong> {{ species_form.detections }}</p>
-    {% else %}
-        <p><strong>Status:</strong> {{ species_result.status }}</p>
-        <p><strong>Prediction:</strong> {{ species_result.prediction }}</p>
-        <p><strong>Score:</strong> {{ species_result.prediction_score }}</p>
-        <p><strong>Source:</strong> {{ species_result.prediction_source }}</p>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert success">{{ message }}</div>
+        {% endfor %}
     {% endif %}
 
-    <h4>Species Detections</h4>
+    {% if can_edit %}
+        <form method="post">
+            {% csrf_token %}
+    {% endif %}
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>Source</th>
-            <th>Label</th>
-            <th>Confidence</th>
-            <th>BBox X</th>
-            <th>BBox Y</th>
-            <th>BBox W</th>
-            <th>BBox H</th>
-        </tr>
+    <div class="detail-header">
+        <h1>{{ image.file_name }}</h1>
+        {% if species_result %}
+            <span class="badge">Animal Detected</span>
+        {% endif %}
+    </div>
 
-        {% for detection in species_result.species_detections.all %}
-            <tr>
-                <td>{{ detection.source }}</td>
-                <td>{{ detection.label }}</td>
-                <td>{{ detection.confidence }}</td>
-                <td>{{ detection.bbox_x }}</td>
-                <td>{{ detection.bbox_y }}</td>
-                <td>{{ detection.bbox_width }}</td>
-                <td>{{ detection.bbox_height }}</td>
-            </tr>
-        {% empty %}
-            <tr>
-                <td colspan="7">No SpeciesNet detections.</td>
-            </tr>
-        {% endfor %}
-    </table>
-{% else %}
-    <p>No SpeciesNet result.</p>
-{% endif %}
+    <div class="detail-layout">
+        <section class="image-panel">
+            {% if image_url %}
+                <img src="{{ image_url }}" class="detail-image">
+            {% else %}
+                <div class="image-placeholder large">
+                    No cached image available.
+                </div>
+            {% endif %}
+        </section>
 
-<hr>
+        <section class="card detail-card">
+            <h2>Current Metadata</h2>
 
-<h3>OCR</h3>
+            <div class="meta-row">
+                <strong>File ID</strong>
+                <span>{{ image.file_id }}</span>
+            </div>
 
-{% if can_edit %}
-    <p><strong>Status:</strong> {{ ocr_form.status }}</p>
-    <p><strong>OCR Texts:</strong> {{ ocr_form.ocr_texts }}</p>
-    <p><strong>Temperature:</strong> {{ ocr_form.temperature_f }}</p>
-    <p><strong>Date:</strong> {{ ocr_form.capture_date }}</p>
-    <p><strong>Time:</strong> {{ ocr_form.capture_time }}</p>
-    <p><strong>DateTime:</strong> {{ ocr_form.capture_datetime }}</p>
-{% else %}
-    <p><strong>Status:</strong> {{ ocr_result.status }}</p>
-    <p><strong>OCR Texts:</strong> {{ ocr_result.ocr_texts }}</p>
-    <p><strong>Temperature:</strong> {{ ocr_result.temperature_f }}</p>
-    <p><strong>Date:</strong> {{ ocr_result.capture_date }}</p>
-    <p><strong>Time:</strong> {{ ocr_result.capture_time }}</p>
-{% endif %}
+            {% if can_edit %}
+                <div class="meta-row"><strong>File Name</strong>{{ image_form.file_name }}</div>
+                <div class="meta-row"><strong>Path</strong>{{ image_form.path }}</div>
+                <div class="meta-row"><strong>File URL</strong>{{ image_form.file_url }}</div>
+                <div class="meta-row"><strong>Direct Download URL</strong>{{ image_form.direct_download_url }}</div>
+                <div class="meta-row"><strong>Preview URL</strong>{{ image_form.preview_url }}</div>
+            {% else %}
+                <div class="meta-row">
+                    <strong>Path</strong>
+                    <span>{{ image.path }}</span>
+                </div>
 
-{% if can_edit %}
-    <hr>
-    <button type="submit">Save Changes</button>
-</form>
-{% endif %}
+                <div class="meta-row">
+                    <strong>Box URL</strong>
+                    <a href="{{ image.file_url }}" target="_blank">{{ image.file_url }}</a>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="detail-grid">
+        <section class="card detail-card">
+            <h2>SpeciesNet</h2>
+
+            {% if species_result %}
+                {% if can_edit %}
+                    <div class="meta-row"><strong>Status</strong>{{ species_form.status }}</div>
+                    <div class="meta-row"><strong>Prediction</strong>{{ species_form.prediction }}</div>
+                    <div class="meta-row"><strong>Score</strong>{{ species_form.prediction_score }}</div>
+                    <div class="meta-row"><strong>Source</strong>{{ species_form.prediction_source }}</div>
+                    <div class="meta-row"><strong>Animals JSON</strong>{{ species_form.animals }}</div>
+                    <div class="meta-row"><strong>Detections JSON</strong>{{ species_form.detections }}</div>
+                {% else %}
+                    <div class="meta-row"><strong>Status</strong><span>{{ species_result.status }}</span></div>
+                    <div class="meta-row"><strong>Prediction</strong><span>{{ species_result.prediction }}</span></div>
+                    <div class="meta-row"><strong>Score</strong><span>{{ species_result.prediction_score }}</span></div>
+                    <div class="meta-row"><strong>Source</strong><span>{{ species_result.prediction_source }}</span></div>
+                {% endif %}
+            {% else %}
+                <p>No SpeciesNet result.</p>
+            {% endif %}
+        </section>
+
+        <section class="card detail-card wide">
+            <h2>Species Detections</h2>
+
+            <table class="clean-table">
+                <tr>
+                    <th>Source</th>
+                    <th>Label</th>
+                    <th>Confidence</th>
+                    <th>BBox X</th>
+                    <th>BBox Y</th>
+                    <th>BBox W</th>
+                    <th>BBox H</th>
+                </tr>
+
+                {% for detection in species_result.species_detections.all %}
+                    <tr>
+                        <td>{{ detection.source }}</td>
+                        <td>{{ detection.label }}</td>
+                        <td>{{ detection.confidence }}</td>
+                        <td>{{ detection.bbox_x }}</td>
+                        <td>{{ detection.bbox_y }}</td>
+                        <td>{{ detection.bbox_width }}</td>
+                        <td>{{ detection.bbox_height }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7">No SpeciesNet detections.</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </section>
+
+        <section class="card detail-card">
+            <h2>OCR</h2>
+
+            {% if can_edit %}
+                <div class="meta-row"><strong>Status</strong>{{ ocr_form.status }}</div>
+                <div class="meta-row"><strong>OCR Texts</strong>{{ ocr_form.ocr_texts }}</div>
+                <div class="meta-row"><strong>Temperature</strong>{{ ocr_form.temperature_f }}</div>
+                <div class="meta-row"><strong>Date</strong>{{ ocr_form.capture_date }}</div>
+                <div class="meta-row"><strong>Time</strong>{{ ocr_form.capture_time }}</div>
+                <div class="meta-row"><strong>DateTime</strong>{{ ocr_form.capture_datetime }}</div>
+            {% else %}
+                <div class="meta-row"><strong>Status</strong><span>{{ ocr_result.status }}</span></div>
+                <div class="meta-row"><strong>OCR Texts</strong><span>{{ ocr_result.ocr_texts }}</span></div>
+                <div class="meta-row"><strong>Temperature</strong><span>{{ ocr_result.temperature_f }}</span></div>
+                <div class="meta-row"><strong>Date</strong><span>{{ ocr_result.capture_date }}</span></div>
+                <div class="meta-row"><strong>Time</strong><span>{{ ocr_result.capture_time }}</span></div>
+            {% endif %}
+        </section>
+    </div>
+
+    {% if can_edit %}
+        <div class="save-bar">
+            <button class="btn-primary" type="submit">Save Changes</button>
+        </div>
+        </form>
+    {% endif %}
+
+</div>
+{% endblock %}

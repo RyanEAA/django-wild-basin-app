@@ -1,28 +1,46 @@
-<h1>Researcher Dashboard</h1>
+{% extends "base.html" %}
 
-<p>Welcome to the Researcher Dashboard! Here you can view and manage your uploaded images, review OCR and SpeciesNet results, and update your metadata.</p>
+{% block hero %}
+<section class="hero">
+    <h1>Researcher Dashboard</h1>
+    <p>Manage metadata uploads, review data status, and access research tools.</p>
+</section>
+{% endblock %}
 
-<!-- Box Token Status -->
-{% if box_token_status.ok %}
-    <p style="color: green;">
-        ✅ {{ box_token_status.message }}
-    </p>
-{% else %}
-    <p style="color: red;">
-        ⚠️ {{ box_token_status.message }}
-    </p>
+{% block content %}
+<div class="content-page">
 
-    <p>
-        Ask an admin to update the Box access token in App Settings.
-    </p>
-{% endif %}
+    <section class="content-card">
+        <h2>Welcome</h2>
+        <p>
+            Use this dashboard to upload metadata, review OCR and SpeciesNet results,
+            and access the image gallery.
+        </p>
 
+        {% if box_token_status.ok %}
+            <div class="alert success">✅ {{ box_token_status.message }}</div>
+        {% else %}
+            <div class="alert warning">⚠️ {{ box_token_status.message }}</div>
+            <p>Ask an admin to update the Box access token in App Settings.</p>
+        {% endif %}
+    </section>
 
-<!-- Place to upload metadata -->
-<p>
-    <a href="{% url 'upload_metadata' %}">Upload Metadata</a>
-</p>
+    <section class="project-grid">
+        <a class="project-card dashboard-link" href="{% url 'upload_metadata' %}">
+            <h3>Upload Metadata</h3>
+            <p>Upload Box metadata, SpeciesNet JSONL, and OCR JSONL files.</p>
+        </a>
 
-<p>
-    <a href="{% url 'gallery' %}">View Gallery</a>
-</p>
+        <a class="project-card dashboard-link" href="{% url 'gallery' %}">
+            <h3>View Gallery</h3>
+            <p>Browse and filter trail camera image records.</p>
+        </a>
+
+        <a class="project-card dashboard-link" href="/admin/">
+            <h3>Django Admin</h3>
+            <p>Manage users, groups, app settings, and imported records.</p>
+        </a>
+    </section>
+
+</div>
+{% endblock %}

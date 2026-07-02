@@ -1,6 +1,6 @@
 import json
 from ..models import (
-    SpeciesLabel, SpeciesNetResult, SpeciesDetection, ImageRecord, OCRResult
+    SpeciesNetResult, SpeciesDetection, ImageRecord, OCRResult
 )
 def import_box_images(uploaded_file):
     data = json.load(uploaded_file)
@@ -227,34 +227,6 @@ def import_speciesnet_results(uploaded_file):
     flush_batch(pending_items)
 
     return created, updated, failed
-
-def update_species_labels(species_result):
-    labels = []
-
-    if species_result.prediction:
-        labels.append(clean_species_label(species_result.prediction))
-
-    for animal in species_result.animals or []:
-        if isinstance(animal, dict):
-            labels.append(clean_species_label(animal.get("label", "")))
-            labels.append(clean_species_label(animal.get("taxonomy", "")))
-
-    for label in labels:
-        if not label:
-            continue
-
-        species_label, _ = SpeciesLabel.objects.get_or_create(
-            name=label,
-            defaults={
-                "is_human": is_human_label(label),
-            }
-        )
-
-        species_label.count = SpeciesNetResult.objects.filter(
-            prediction__icontains=label
-        ).count()
-        species_label.save(update_fields=["count", "is_human"])
-
 
 def import_ocr_results(uploaded_file):
     created_count = 0

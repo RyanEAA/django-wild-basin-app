@@ -130,15 +130,3 @@ class AppSettings(models.Model):
     def __str__(self):
         return "Application Settings"
     
-class SpeciesLabel(models.Model):
-    name = models.CharField(max_length=255, unique=True)
-    is_human = models.BooleanField(default=False, db_index=True)
-    count = models.IntegerField(default=0)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name

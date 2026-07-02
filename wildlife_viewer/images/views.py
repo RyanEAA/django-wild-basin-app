@@ -27,17 +27,13 @@ from .models import (
     OCRResult, 
     ImportJob, 
     SpeciesDetection,
-    SpeciesLabel
-)
+    )
 
 from .services.box_cache import (
     ensure_cached_image, check_box_token_status
 )
 
 from .services.importers import (
-    clean_species_label,
-    is_human_label,
-    update_species_labels,
     import_box_images,
     import_speciesnet_results,
     import_ocr_results,

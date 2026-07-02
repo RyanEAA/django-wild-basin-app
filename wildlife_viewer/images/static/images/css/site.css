@@ -26,8 +26,8 @@ body {
 }
 
 .brand {
-    margin-left: 0;
-    display: flex;
+    margin-left: 36px;
+
     align-items: center;
     text-decoration: none;
 }
@@ -42,6 +42,12 @@ body {
     height: 52px;
     width: 1px;
     background: var(--border);
+}
+
+.site-nav {
+    display: flex;
+    align-items: center;
+    gap: 36px;   /* Adjust this value to taste */
 }
 
 .site-nav a {
@@ -235,13 +241,13 @@ input, select {
     background: none;
     border: none;
     color: var(--navy);
+    font: inherit;
     font-weight: 700;
     cursor: pointer;
-    font: inherit;
-    padding-bottom: 8px;
+    padding: 8px 0;
+    transition: color .2s ease;
 }
 
 .logout-form button:hover {
     color: var(--green);
-    border-bottom: 3px solid var(--green);
 }

@@ -384,10 +384,19 @@ input, select {
     color: var(--navy);
 }
 
-.meta-row input,
-.meta-row textarea,
-.meta-row select {
+.detail-card input,
+.detail-card textarea,
+.detail-card select {
     width: 100%;
+    box-sizing: border-box;
+}
+
+.detail-card textarea {
+    min-height: 120px;
+}
+
+.detail-card .meta-row {
+    grid-template-columns: 140px 1fr;
 }
 
 .clean-table {

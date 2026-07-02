@@ -51,7 +51,10 @@
 
 <div class="gallery-grid">
     {% for card in image_cards %}
-        <a href="{% url 'image_detail' card.image.file_id %}" class="card image-card">
+        <a
+            href="{% url 'image_detail' card.image.file_id %}?next={{ request.get_full_path|urlencode }}"
+            class="card image-card"
+        >
             {% if card.image_url %}
                 <img src="{{ card.image_url }}">
             {% else %}

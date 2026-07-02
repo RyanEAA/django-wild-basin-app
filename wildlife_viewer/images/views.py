@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.urls import reverse
 
 from .decorators import researcher_required
 from .forms import (
@@ -349,6 +350,7 @@ def user_is_researcher(user):
     )
 
 def image_detail(request, file_id):
+    back_url = request.GET.get("next") or request.POST.get("next") or reverse("gallery")
     image = get_object_or_404(ImageRecord, file_id=file_id)
 
     if (
@@ -377,7 +379,9 @@ def image_detail(request, file_id):
             ocr_form.save()
 
             messages.success(request, "Image metadata updated.")
-            return redirect("image_detail", file_id=image.file_id)
+
+            detail_url = reverse("image_detail", args=[image.file_id])
+            return redirect(f"{detail_url}?next={back_url}")
 
     else:
         species_form = SpeciesNetEditForm(instance=species_result)
@@ -391,6 +395,7 @@ def image_detail(request, file_id):
         "can_edit": can_edit,
         "species_form": species_form,
         "ocr_form": ocr_form,
+        "back_url": back_url,
     })
 
 

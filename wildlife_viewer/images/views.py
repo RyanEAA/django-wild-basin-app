@@ -392,3 +392,15 @@ def image_detail(request, file_id):
         "species_form": species_form,
         "ocr_form": ocr_form,
     })
+
+
+def about(request):
+    return render(request, "images/about.html")
+
+
+def research(request):
+    return render(request, "images/research.html")
+
+
+def contact(request):
+    return render(request, "images/contact.html")

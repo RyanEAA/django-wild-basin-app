@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block hero %}
+<section class="hero">
+    <h1>Research</h1>
+    <p>Tools and research projects supporting wildlife monitoring, computer vision, and machine learning.</p>
+</section>
+{% endblock %}
+
+{% block content %}
+<div class="content-page">
+
+    <section class="content-card">
+        <h2>Research at Wild Basin</h2>
+        <p>
+            Wild Basin supports research in a living laboratory within a 227-acre nature preserve.
+            Past and current research topics include water quality, wildlife populations, soil microbes,
+            predator activity, human-wildlife interactions, and creative research across disciplines.
+        </p>
+    </section>
+
+    <section class="content-card">
+        <h2>Project Repositories</h2>
+
+        <div class="project-grid">
+            <div class="project-card">
+                <h3>Box Drive Processing Pipeline</h3>
+                <p>
+                    Python tools for collecting Box file images, run speciesnet and OCR processing,
+                    and generate json metadata files.                </p>
+                <a class="external-link" href="https://github.com/RyanEAA/box-animal-classification" target="_blank">GitHub Repo</a>
+            </div>
+
+            <div class="project-card">
+                <h3>Wild Basin Image Gallery App</h3>
+                <p>
+                    Django web application for uploading metadata, searching SpeciesNet results,
+                    reviewing OCR data, and viewing cached trail camera images.
+                </p>
+                <a class="external-link" href="https://github.com/RyanEAA/django-wild-basin-app" target="_blank">GitHub Repo</a>
+            </div>
+
+            <div class="project-card">
+                <h3>Adaptive Backpropagation Research</h3>
+                <p>
+                    Experimental machine learning research exploring whether selected subnetworks
+                    can reduce backpropagation computation while maintaining model performance.
+                </p>
+                <a class="external-link" href="https://github.com/RyanEAA/stochastic-sparse-backpropagation" target="_blank">GitHub Repo</a>
+            </div>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

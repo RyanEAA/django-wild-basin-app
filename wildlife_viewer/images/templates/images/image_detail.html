@@ -88,65 +88,6 @@
     </div>
 
     <div class="detail-grid">
-        <section class="card detail-card">
-            <h2>SpeciesNet</h2>
-
-            {% if species_result %}
-                {% if can_edit %}
-                    <div class="meta-row">
-                        <strong>Status</strong>
-                        {{ species_form.status }}
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Prediction</strong>
-                        {{ species_form.prediction }}
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Score</strong>
-                        {{ species_form.prediction_score }}
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Source</strong>
-                        {{ species_form.prediction_source }}
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Animals JSON</strong>
-                        {{ species_form.animals }}
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Detections JSON</strong>
-                        {{ species_form.detections }}
-                    </div>
-                {% else %}
-                    <div class="meta-row">
-                        <strong>Status</strong>
-                        <span>{{ species_result.status }}</span>
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Prediction</strong>
-                        <span>{{ species_result.prediction }}</span>
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Score</strong>
-                        <span>{{ species_result.prediction_score }}</span>
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Source</strong>
-                        <span>{{ species_result.prediction_source }}</span>
-                    </div>
-                {% endif %}
-            {% else %}
-                <p>No SpeciesNet result.</p>
-            {% endif %}
-        </section>
 
         <section class="card detail-card wide">
             <h2>Species Detections</h2>
@@ -164,15 +105,17 @@
 
                 {% if species_result %}
                     {% for detection in species_result.species_detections.all %}
-                        <tr>
-                            <td>{{ detection.source }}</td>
-                            <td>{{ detection.label }}</td>
-                            <td>{{ detection.confidence }}</td>
-                            <td>{{ detection.bbox_x }}</td>
-                            <td>{{ detection.bbox_y }}</td>
-                            <td>{{ detection.bbox_width }}</td>
-                            <td>{{ detection.bbox_height }}</td>
-                        </tr>
+                        {% if detection.source != "detection" %}
+                            <tr>
+                                <td>{{ detection.source }}</td>
+                                <td>{{ detection.label }}</td>
+                                <td>{{ detection.confidence }}</td>
+                                <td>{{ detection.bbox_x }}</td>
+                                <td>{{ detection.bbox_y }}</td>
+                                <td>{{ detection.bbox_width }}</td>
+                                <td>{{ detection.bbox_height }}</td>
+                            </tr>
+                        {% endif %}
                     {% empty %}
                         <tr>
                             <td colspan="7">No SpeciesNet detections.</td>

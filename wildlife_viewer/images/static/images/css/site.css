@@ -343,9 +343,19 @@ input, select {
 }
 
 .detail-grid {
-    display: grid;
-    grid-template-columns: 1fr 1.7fr 1fr;
-    gap: 24px;
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    margin-top: 24px;
+}
+
+.detail-grid > .wide {
+    flex: 1;
+}
+
+.detail-grid > .detail-card:not(.wide) {
+    width: 360px;
+    flex-shrink: 0;
 }
 
 .detail-image {
@@ -370,6 +380,11 @@ input, select {
     font-size: 20px;
     margin-top: 0;
     color: var(--navy);
+}
+
+.detail-card.wide {
+    width: 100%;
+    min-width: 0;
 }
 
 .meta-row {
@@ -473,4 +488,25 @@ input, select {
 
 .login-card input {
     width: 100%;
+}
+
+.editable-detections-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.editable-detections-table th,
+.editable-detections-table td {
+    padding: 8px;
+}
+
+.editable-detections-table input[type="text"],
+.editable-detections-table input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.editable-detections-table th:first-child,
+.editable-detections-table td:first-child input {
+    min-width: 160px;
 }

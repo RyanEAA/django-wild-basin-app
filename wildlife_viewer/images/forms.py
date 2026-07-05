@@ -2,7 +2,10 @@ import json
 from django import forms
 from django.core.exceptions import ValidationError
 from django import forms
-from .models import ImageRecord, SpeciesNetResult, OCRResult
+from .models import (
+    ImageRecord, SpeciesNetResult, OCRResult, SpeciesDetection
+)
+from django.forms import modelformset_factory
 
 def validate_json_extension(file):
     if not file.name.lower().endswith(".json"):
@@ -138,3 +141,13 @@ class OCREditForm(forms.ModelForm):
     class Meta:
         model = OCRResult
         fields = ["status", "ocr_texts", "temperature_f", "capture_date", "capture_time", "capture_datetime"]
+
+
+SpeciesDetectionFormSet = modelformset_factory(
+    SpeciesDetection,
+    fields=[
+        "label",
+    ],
+    extra=0,
+    can_delete=True,
+)

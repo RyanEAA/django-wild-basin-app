@@ -92,41 +92,90 @@
         <section class="card detail-card wide">
             <h2>Species Detections</h2>
 
-            <table class="clean-table">
-                <tr>
-                    <th>Source</th>
-                    <th>Label</th>
-                    <th>Confidence</th>
-                    <th>BBox X</th>
-                    <th>BBox Y</th>
-                    <th>BBox W</th>
-                    <th>BBox H</th>
-                </tr>
+            {% if can_edit %}
+                {{ detection_formset.management_form }}
 
-                {% if species_result %}
-                    {% for detection in species_result.species_detections.all %}
-                        {% if detection.source != "detection" %}
-                            <tr>
-                                <td>{{ detection.source }}</td>
-                                <td>{{ detection.label }}</td>
-                                <td>{{ detection.confidence }}</td>
-                                <td>{{ detection.bbox_x }}</td>
-                                <td>{{ detection.bbox_y }}</td>
-                                <td>{{ detection.bbox_width }}</td>
-                                <td>{{ detection.bbox_height }}</td>
-                            </tr>
-                        {% endif %}
-                    {% empty %}
+                <table class="clean-table editable-detections-table">
+                    <thead>
                         <tr>
-                            <td colspan="7">No SpeciesNet detections.</td>
+                            <th>Label</th>
+                            <th>Confidence</th>
+                            <th>Bounding Box</th>
+                            <th>Delete</th>
                         </tr>
-                    {% endfor %}
-                {% else %}
+                    </thead>
+
+                    <tbody>
+                        {% for form in detection_formset %}
+                            <tr>
+                                {{ form.id }}
+
+                                <td>
+                                    {{ form.label }}
+                                </td>
+
+                                <td>
+                                    {{ form.instance.confidence|floatformat:3 }}
+                                </td>
+
+                                <td>
+                                    ({{ form.instance.bbox_x|floatformat:3 }},
+                                    {{ form.instance.bbox_y|floatformat:3 }},
+                                    {{ form.instance.bbox_width|floatformat:3 }},
+                                    {{ form.instance.bbox_height|floatformat:3 }})
+                                </td>
+
+                                <td style="text-align:center">
+                                    {{ form.DELETE }}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4">
+                                    No editable species detections.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+            {% else %}
+                <table class="clean-table">
                     <tr>
-                        <td colspan="7">No SpeciesNet result.</td>
+                        <th>Source</th>
+                        <th>Label</th>
+                        <th>Confidence</th>
+                        <th>BBox X</th>
+                        <th>BBox Y</th>
+                        <th>BBox W</th>
+                        <th>BBox H</th>
                     </tr>
-                {% endif %}
-            </table>
+
+                    {% if species_result %}
+                        {% for detection in species_result.species_detections.all %}
+                            {% if detection.source != "detection" %}
+                                <tr>
+                                    <td>{{ detection.source }}</td>
+                                    <td>{{ detection.label }}</td>
+                                    <td>{{ detection.confidence }}</td>
+                                    <td>{{ detection.bbox_x }}</td>
+                                    <td>{{ detection.bbox_y }}</td>
+                                    <td>{{ detection.bbox_width }}</td>
+                                    <td>{{ detection.bbox_height }}</td>
+                                </tr>
+                            {% endif %}
+                        {% empty %}
+                            <tr>
+                                <td colspan="7">No SpeciesNet detections.</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7">No SpeciesNet result.</td>
+                        </tr>
+                    {% endif %}
+                </table>
+            {% endif %}
         </section>
 
         <section class="card detail-card">

@@ -18,7 +18,8 @@ from .forms import (
     OCRUploadForm,
     GalleryFilterForm,
     SpeciesNetEditForm,
-    OCREditForm
+    OCREditForm,
+    SpeciesDetectionFormSet
 )
 
 from .models import (
@@ -363,6 +364,10 @@ def image_detail(request, file_id):
 
     can_edit = user_is_researcher(request.user)
 
+    detection_queryset = species_result.species_detections.exclude(
+        source="detection"
+    )
+
     if request.method == "POST":
         if not can_edit:
             return redirect("image_detail", file_id=image.file_id)
@@ -370,9 +375,16 @@ def image_detail(request, file_id):
         species_form = SpeciesNetEditForm(request.POST, instance=species_result)
         ocr_form = OCREditForm(request.POST, instance=ocr_result)
 
-        if species_form.is_valid() and ocr_form.is_valid():
+        detection_formset = SpeciesDetectionFormSet(
+            request.POST,
+            queryset=detection_queryset,
+            prefix="detections",
+        )
+
+        if species_form.is_valid() and ocr_form.is_valid() and detection_formset.is_valid():
             species_form.save()
             ocr_form.save()
+            detection_formset.save()
 
             messages.success(request, "Image metadata updated.")
 
@@ -383,6 +395,11 @@ def image_detail(request, file_id):
         species_form = SpeciesNetEditForm(instance=species_result)
         ocr_form = OCREditForm(instance=ocr_result)
 
+        detection_formset = SpeciesDetectionFormSet(
+            queryset=detection_queryset,
+            prefix="detections",
+        )
+
     return render(request, "images/image_detail.html", {
         "image": image,
         "image_url": image_url,
@@ -391,6 +408,7 @@ def image_detail(request, file_id):
         "can_edit": can_edit,
         "species_form": species_form,
         "ocr_form": ocr_form,
+        "detection_formset": detection_formset,
         "back_url": back_url,
     })
 

@@ -17,3 +17,5 @@ __pycache__/
 # Django media cache
 wildlife_viewer/media/
 media/
+
+.env

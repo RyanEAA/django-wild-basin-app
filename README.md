@@ -340,92 +340,145 @@ db.sqlite3
 
 ---
 
-# Development Roadmap
+Since you've moved to split settings and introduced `.env`, I'd update the README to reflect the actual setup someone would need to run the project from scratch.
 
-**Phase 1**
-
-✓ Upload metadata
-
-✓ Browse images
-
-✓ Edit metadata
-
-**Phase 2**
-
-Bounding box visualization
-
-Species correction workflow
-
-Review queue
-
-**Phase 3**
-
-Statistics dashboard
-
-Background downloads
-
-Cache cleanup
-
-**Phase 4**
-
-Production deployment
-
-Docker
-
-PostgreSQL
-
-DigitalOcean
-
-AWS
-
-University server
+I'd probably make it look something like this:
 
 ---
 
 # Running Locally
 
-Install dependencies
+## Clone the repository
+
+```bash
+git clone <repository-url>
+cd wildlife_viewer
 ```
+
+## Create a virtual environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Windows:
+
+```powershell
+.venv\Scripts\activate
+```
+
+## Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-Run migrations
-```
-python manage.py makemigrations
+---
 
+## Create a local `.env` file
+
+Create a `.env` file in the project root (next to `README.md`):
+
+```env
+DJANGO_SECRET_KEY=development-secret-key
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1
+```
+
+---
+
+## Run database migrations
+
+```bash
+python manage.py makemigrations
 python manage.py migrate
 ```
 
-Create superuser
-```
+---
+
+## Create a superuser
+
+```bash
 python manage.py createsuperuser
 ```
 
-Go to admin page and 
-- Create user
-- Create Researcher group
-- Assign user to Researcher group
+---
 
-Run server
+## Create researcher permissions
+
+Open the Django admin panel:
 
 ```
+http://127.0.0.1:8000/admin/
+```
+
+Then:
+
+1. Create a user account for the researcher.
+2. Create a `Researcher` group.
+3. Assign the user to the `Researcher` group.
+
+---
+
+## Start the development server
+
+```bash
 python manage.py runserver
 ```
 
-Researcher dashboard
-```
-http://127.0.0.1:8000/researcher/
-```
+---
 
-Gallery
+## Useful URLs
+
+### Gallery
+
 ```
 http://127.0.0.1:8000/
 ```
 
-Admin
+### Researcher Dashboard
+
+```
+http://127.0.0.1:8000/researcher/
+```
+
+### Django Admin
+
 ```
 http://127.0.0.1:8000/admin/
 ```
+
+---
+
+## Production configuration
+
+Development uses:
+
+```text
+config.settings.development
+```
+
+Production uses:
+
+```text
+config.settings.production
+```
+
+Run Django using a specific settings module:
+
+Development:
+
+```bash
+python manage.py runserver --settings=config.settings.development
+```
+
+Production checks:
+
+```bash
+python manage.py check --deploy --settings=config.settings.production
+```
+
 ---
 
 # Future Ideas

@@ -4,12 +4,16 @@
 <div class="detail-page">
 
     <p>
-        <a class="btn-link" href="{{ back_url }}">← Back to gallery</a>
+        <a class="btn-link" href="{{ back_url }}">
+            ← Back to gallery
+        </a>
     </p>
 
     {% if messages %}
         {% for message in messages %}
-            <div class="alert success">{{ message }}</div>
+            <div class="alert success">
+                {{ message }}
+            </div>
         {% endfor %}
     {% endif %}
 
@@ -23,14 +27,21 @@
         <h1>{{ image.file_name }}</h1>
 
         {% if species_result %}
-            <span class="badge">Animal Detected</span>
+            <span class="badge">
+                {{ species_result.display_prediction|default:"SpeciesNet result" }}
+            </span>
         {% endif %}
     </div>
 
     <div class="detail-layout">
+
         <section class="image-panel">
             {% if image_url %}
-                <img src="{{ image_url }}" class="detail-image">
+                <img
+                    src="{{ image_url }}"
+                    class="detail-image"
+                    alt="{{ image.file_name }}"
+                >
             {% else %}
                 <div class="image-placeholder large">
                     No cached image available.
@@ -46,42 +57,45 @@
                 <span>{{ image.file_id }}</span>
             </div>
 
+            <div class="meta-row">
+                <strong>File Name</strong>
+                <span>{{ image.file_name|default:"—" }}</span>
+            </div>
+
+            <div class="meta-row">
+                <strong>Path</strong>
+                <span>{{ image.path|default:"—" }}</span>
+            </div>
+
+            <div class="meta-row">
+                <strong>Box URL</strong>
+
+                {% if image.file_url %}
+                    <a
+                        href="{{ image.file_url }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        {{ image.file_url }}
+                    </a>
+                {% else %}
+                    <span>—</span>
+                {% endif %}
+            </div>
+
             {% if can_edit %}
                 <div class="meta-row">
-                    <strong>File Name</strong>
-                    {{ image_form.file_name }}
-                </div>
-
-                <div class="meta-row">
-                    <strong>Path</strong>
-                    {{ image_form.path }}
-                </div>
-
-                <div class="meta-row">
-                    <strong>File URL</strong>
-                    {{ image_form.file_url }}
-                </div>
-
-                <div class="meta-row">
                     <strong>Direct Download URL</strong>
-                    {{ image_form.direct_download_url }}
+                    <span>
+                        {{ image.direct_download_url|default:"—" }}
+                    </span>
                 </div>
 
                 <div class="meta-row">
                     <strong>Preview URL</strong>
-                    {{ image_form.preview_url }}
-                </div>
-            {% else %}
-                <div class="meta-row">
-                    <strong>Path</strong>
-                    <span>{{ image.path }}</span>
-                </div>
-
-                <div class="meta-row">
-                    <strong>Box URL</strong>
-                    <a href="{{ image.file_url }}" target="_blank">
-                        {{ image.file_url }}
-                    </a>
+                    <span>
+                        {{ image.preview_url|default:"—" }}
+                    </span>
                 </div>
             {% endif %}
         </section>
@@ -99,6 +113,7 @@
                     <thead>
                         <tr>
                             <th>Label</th>
+                            <th>Prediction</th>
                             <th>Confidence</th>
                             <th>Bounding Box</th>
                             <th>Delete</th>
@@ -115,24 +130,38 @@
                                 </td>
 
                                 <td>
-                                    {{ form.instance.confidence|floatformat:3 }}
+                                    {% if species_result %}
+                                        {{ species_result.display_prediction|default:"—" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
                                 </td>
 
                                 <td>
-                                    ({{ form.instance.bbox_x|floatformat:3 }},
-                                    {{ form.instance.bbox_y|floatformat:3 }},
-                                    {{ form.instance.bbox_width|floatformat:3 }},
-                                    {{ form.instance.bbox_height|floatformat:3 }})
+                                    {% if form.instance.confidence is not None %}
+                                        {{ form.instance.confidence|floatformat:3 }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
                                 </td>
 
-                                <td style="text-align:center">
+                                <td>
+                                    (
+                                    {{ form.instance.bbox_x|floatformat:3 }},
+                                    {{ form.instance.bbox_y|floatformat:3 }},
+                                    {{ form.instance.bbox_width|floatformat:3 }},
+                                    {{ form.instance.bbox_height|floatformat:3 }}
+                                    )
+                                </td>
+
+                                <td style="text-align: center;">
                                     {{ form.DELETE }}
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="4">
-                                    No editable species detections.
+                                <td colspan="5">
+                                    No editable SpeciesNet detections.
                                 </td>
                             </tr>
                         {% endfor %}
@@ -141,39 +170,85 @@
 
             {% else %}
                 <table class="clean-table">
-                    <tr>
-                        <th>Source</th>
-                        <th>Label</th>
-                        <th>Confidence</th>
-                        <th>BBox X</th>
-                        <th>BBox Y</th>
-                        <th>BBox W</th>
-                        <th>BBox H</th>
-                    </tr>
-
-                    {% if species_result %}
-                        {% for detection in species_result.species_detections.all %}
-                            {% if detection.source != "detection" %}
-                                <tr>
-                                    <td>{{ detection.source }}</td>
-                                    <td>{{ detection.label }}</td>
-                                    <td>{{ detection.confidence }}</td>
-                                    <td>{{ detection.bbox_x }}</td>
-                                    <td>{{ detection.bbox_y }}</td>
-                                    <td>{{ detection.bbox_width }}</td>
-                                    <td>{{ detection.bbox_height }}</td>
-                                </tr>
-                            {% endif %}
-                        {% empty %}
-                            <tr>
-                                <td colspan="7">No SpeciesNet detections.</td>
-                            </tr>
-                        {% endfor %}
-                    {% else %}
+                    <thead>
                         <tr>
-                            <td colspan="7">No SpeciesNet result.</td>
+                            <th>Label</th>
+                            <th>Prediction</th>
+                            <th>Confidence</th>
+                            <th>BBox X</th>
+                            <th>BBox Y</th>
+                            <th>BBox W</th>
+                            <th>BBox H</th>
                         </tr>
-                    {% endif %}
+                    </thead>
+
+                    <tbody>
+                        {% if species_result %}
+                            {% for detection in detections %}
+                                <tr>
+                                    <td>
+                                        {{ detection.label|default:"—" }}
+                                    </td>
+
+                                    <td>
+                                        {{ species_result.display_prediction|default:"—" }}
+                                    </td>
+
+                                    <td>
+                                        {% if detection.confidence is not None %}
+                                            {{ detection.confidence|floatformat:3 }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if detection.bbox_x is not None %}
+                                            {{ detection.bbox_x|floatformat:3 }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if detection.bbox_y is not None %}
+                                            {{ detection.bbox_y|floatformat:3 }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if detection.bbox_width is not None %}
+                                            {{ detection.bbox_width|floatformat:3 }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if detection.bbox_height is not None %}
+                                            {{ detection.bbox_height|floatformat:3 }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="7">
+                                        No SpeciesNet detections.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7">
+                                    No SpeciesNet result.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
                 </table>
             {% endif %}
         </section>
@@ -211,31 +286,52 @@
                     <strong>DateTime</strong>
                     {{ ocr_form.capture_datetime }}
                 </div>
-            {% else %}
+
+            {% elif ocr_result %}
                 <div class="meta-row">
                     <strong>Status</strong>
-                    <span>{{ ocr_result.status }}</span>
+                    <span>{{ ocr_result.status|default:"—" }}</span>
                 </div>
 
                 <div class="meta-row">
                     <strong>OCR Texts</strong>
-                    <span>{{ ocr_result.ocr_texts }}</span>
+                    <span>{{ ocr_result.ocr_texts|default:"—" }}</span>
                 </div>
 
                 <div class="meta-row">
                     <strong>Temperature</strong>
-                    <span>{{ ocr_result.temperature_f }}</span>
+                    <span>
+                        {% if ocr_result.temperature_f is not None %}
+                            {{ ocr_result.temperature_f }} °F
+                        {% else %}
+                            —
+                        {% endif %}
+                    </span>
                 </div>
 
                 <div class="meta-row">
                     <strong>Date</strong>
-                    <span>{{ ocr_result.capture_date }}</span>
+                    <span>
+                        {{ ocr_result.capture_date|default:"—" }}
+                    </span>
                 </div>
 
                 <div class="meta-row">
                     <strong>Time</strong>
-                    <span>{{ ocr_result.capture_time }}</span>
+                    <span>
+                        {{ ocr_result.capture_time|default:"—" }}
+                    </span>
                 </div>
+
+                <div class="meta-row">
+                    <strong>DateTime</strong>
+                    <span>
+                        {{ ocr_result.capture_datetime|default:"—" }}
+                    </span>
+                </div>
+
+            {% else %}
+                <p>No OCR result.</p>
             {% endif %}
         </section>
     </div>

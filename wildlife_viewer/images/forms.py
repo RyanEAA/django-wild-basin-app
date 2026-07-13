@@ -69,19 +69,150 @@ def validate_jsonl_first_line(file, required_fields, file_label):
         file.seek(0)
 
 
-def validate_speciesnet_file(file):
-    validate_jsonl_first_line(
-        file,
-        required_fields={
-            "file_id",
-            "prediction",
-            "prediction_score",
-            "animals",
-            "detections",
-        },
-        file_label="SpeciesNet",
+SPECIESNET_REQUIRED_FIELDS = {
+    "status",
+    "file_id",
+    "file_name",
+    "file_url",
+    "prediction",
+}
+
+
+def validate_speciesnet_item(item):
+    """
+    Validate one SpeciesNet JSONL record.
+
+    Returns a list of validation error strings.
+    An empty list means the record is valid.
+    """
+    errors = []
+
+    missing_top_level = sorted(
+        field
+        for field in SPECIESNET_REQUIRED_FIELDS
+        if field not in item
     )
 
+    if missing_top_level:
+        errors.append(
+            "Missing top-level fields: "
+            + ", ".join(missing_top_level)
+        )
+        return errors
+
+    prediction_entry = item.get("prediction")
+
+    if not isinstance(prediction_entry, dict):
+        errors.append(
+            "'prediction' must be a JSON object."
+        )
+        return errors
+
+    required_prediction_fields = {
+        "detections",
+        "prediction",
+        "prediction_score",
+        "prediction_source",
+    }
+
+    missing_prediction_fields = sorted(
+        field
+        for field in required_prediction_fields
+        if field not in prediction_entry
+    )
+
+    if missing_prediction_fields:
+        errors.append(
+            "Prediction is missing fields: "
+            + ", ".join(missing_prediction_fields)
+        )
+
+    detections = prediction_entry.get("detections")
+
+    if not isinstance(detections, list):
+        errors.append(
+            "'prediction.detections' must be a list."
+        )
+
+    prediction_score = prediction_entry.get(
+        "prediction_score"
+    )
+
+    if (
+        prediction_score is not None
+        and not isinstance(prediction_score, (int, float))
+    ):
+        errors.append(
+            "'prediction.prediction_score' must be numeric."
+        )
+
+    return errors
+
+
+def validate_speciesnet_file(uploaded_file, max_lines=20):
+    """
+    Validate the first several non-empty records in a SpeciesNet JSONL file.
+    """
+    errors = []
+    checked_lines = 0
+
+    try:
+        uploaded_file.seek(0)
+
+        for line_number, raw_line in enumerate(
+            uploaded_file,
+            start=1,
+        ):
+            if checked_lines >= max_lines:
+                break
+
+            try:
+                if isinstance(raw_line, bytes):
+                    line = raw_line.decode("utf-8").strip()
+                else:
+                    line = str(raw_line).strip()
+
+                if not line:
+                    continue
+
+                item = json.loads(line)
+
+                if not isinstance(item, dict):
+                    errors.append(
+                        f"Line {line_number}: "
+                        "expected a JSON object."
+                    )
+                    continue
+
+                item_errors = validate_speciesnet_item(item)
+
+                for error in item_errors:
+                    errors.append(
+                        f"Line {line_number}: {error}"
+                    )
+
+                checked_lines += 1
+
+            except UnicodeDecodeError as error:
+                errors.append(
+                    f"Line {line_number}: "
+                    f"invalid UTF-8: {error}"
+                )
+
+            except json.JSONDecodeError as error:
+                errors.append(
+                    f"Line {line_number}: "
+                    f"invalid JSON: {error}"
+                )
+
+        if checked_lines == 0 and not errors:
+            errors.append("SpeciesNet file is empty.")
+
+        if errors:
+            raise ValidationError(errors)
+
+    finally:
+        uploaded_file.seek(0)
 
 def validate_ocr_file(file):
     validate_jsonl_first_line(

@@ -69,34 +69,47 @@ def chunks(items, size=200):
         yield items[i:i + size]
 
 ########## SpeciesNet Imports
+
 def normalize_speciesnet_item(item):
     """
-    Normalize a SpeciesNet JSONL record into the structure expected by
-    SpeciesNetResult and SpeciesDetection.
+    Normalize one SpeciesNet result.
 
-    Supports records where prediction data is either:
-    - stored at the top level, or
-    - nested inside `prediction_entry`.
+    Supports:
+
+    1. Current format:
+       {
+           "prediction": {
+               "detections": [...],
+               "prediction": "...",
+               "prediction_score": 0.9
+           }
+       }
+
+    2. Older format using `prediction_entry`.
+
+    3. Older flattened fields.
     """
+    file_id = item.get("file_id")
 
-    prediction_entry = item.get("prediction_entry")
+    if file_id is None:
+        raise ValueError("Missing file_id")
 
-    if not isinstance(prediction_entry, dict):
+    nested_prediction = item.get("prediction")
+
+    if isinstance(nested_prediction, dict):
+        prediction_entry = nested_prediction
+
+    elif isinstance(item.get("prediction_entry"), dict):
+        prediction_entry = item["prediction_entry"]
+
+    else:
         prediction_entry = {}
 
-    prediction = item.get("prediction")
-
-    # Some formats may put the prediction itself inside prediction_entry.
-    if isinstance(prediction, dict):
-        prediction_entry = prediction
-        prediction = (
-            prediction_entry.get("prediction")
-            or prediction_entry.get("label")
-            or ""
-        )
-
-    if not prediction:
-        prediction = (
+    # The final image-level species prediction.
+    if isinstance(nested_prediction, str):
+        prediction_label = nested_prediction
+    else:
+        prediction_label = (
             prediction_entry.get("prediction")
             or prediction_entry.get("label")
             or ""
@@ -105,7 +118,9 @@ def normalize_speciesnet_item(item):
     prediction_score = item.get("prediction_score")
 
     if prediction_score is None:
-        prediction_score = prediction_entry.get("prediction_score")
+        prediction_score = prediction_entry.get(
+            "prediction_score"
+        )
 
     if prediction_score is None:
         prediction_score = prediction_entry.get("score")
@@ -117,20 +132,6 @@ def normalize_speciesnet_item(item):
         or ""
     )
 
-    status = (
-        item.get("status")
-        or prediction_entry.get("status")
-        or ""
-    )
-
-    animals = item.get("animals")
-
-    if not isinstance(animals, list):
-        animals = prediction_entry.get("animals")
-
-    if not isinstance(animals, list):
-        animals = []
-
     detections = prediction_entry.get("detections")
 
     if not isinstance(detections, list):
@@ -139,17 +140,26 @@ def normalize_speciesnet_item(item):
     if not isinstance(detections, list):
         detections = []
 
+    animals = prediction_entry.get("animals")
+
+    if not isinstance(animals, list):
+        animals = item.get("animals")
+
+    if not isinstance(animals, list):
+        animals = []
+
     return {
-        "file_id": str(item["file_id"]),
+        "file_id": str(file_id),
         "file_name": item.get("file_name") or "",
         "file_url": item.get("file_url") or "",
-        "status": status,
-        "prediction": prediction,
+        "status": item.get("status") or "",
+        "prediction": prediction_label,
         "prediction_score": prediction_score,
         "prediction_source": prediction_source,
         "animals": animals,
         "detections": detections,
     }
+
 
 def import_speciesnet_results(uploaded_file):
     created = 0

@@ -67,14 +67,43 @@ class SpeciesNetResult(models.Model):
     status = models.CharField(max_length=50, blank=True, null=True)
     prediction = models.TextField(blank=True, null=True)
     prediction_score = models.FloatField(null=True, blank=True)
-    prediction_source = models.CharField(max_length=255, blank=True, null=True)
+    prediction_source = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+    )
 
     animals = models.JSONField(default=list, blank=True)
     detections = models.JSONField(default=list, blank=True)
 
-    def __str__(self):
-        return f"SpeciesNetResult(image={self.image.file_id}, status={self.status})"
+    @property
+    def display_prediction(self):
+        """
+        Return the common name from a SpeciesNet taxonomy string.
 
+        Example:
+        uuid;mammalia;carnivora;canidae;canis;latrans;coyote
+        becomes:
+        coyote
+        """
+        if not self.prediction:
+            return ""
+
+        parts = [
+            part.strip()
+            for part in self.prediction.split(";")
+            if part.strip()
+        ]
+
+        return parts[-1] if parts else self.prediction
+
+    def __str__(self):
+        return (
+            f"SpeciesNetResult("
+            f"image={self.image.file_id}, "
+            f"status={self.status}"
+            f")"
+        )
 
 class OCRResult(models.Model):
     image = models.OneToOneField(

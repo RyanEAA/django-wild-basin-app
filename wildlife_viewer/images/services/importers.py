@@ -1,11 +1,13 @@
 import re
 from datetime import datetime
 from django.utils import timezone
+from django.db import transaction
 
 import json
 from ..models import (
     SpeciesNetResult, SpeciesDetection, ImageRecord, OCRResult
 )
+
 def import_box_images(uploaded_file):
     data = json.load(uploaded_file)
 
@@ -66,6 +68,89 @@ def chunks(items, size=200):
     for i in range(0, len(items), size):
         yield items[i:i + size]
 
+########## SpeciesNet Imports
+def normalize_speciesnet_item(item):
+    """
+    Normalize a SpeciesNet JSONL record into the structure expected by
+    SpeciesNetResult and SpeciesDetection.
+
+    Supports records where prediction data is either:
+    - stored at the top level, or
+    - nested inside `prediction_entry`.
+    """
+
+    prediction_entry = item.get("prediction_entry")
+
+    if not isinstance(prediction_entry, dict):
+        prediction_entry = {}
+
+    prediction = item.get("prediction")
+
+    # Some formats may put the prediction itself inside prediction_entry.
+    if isinstance(prediction, dict):
+        prediction_entry = prediction
+        prediction = (
+            prediction_entry.get("prediction")
+            or prediction_entry.get("label")
+            or ""
+        )
+
+    if not prediction:
+        prediction = (
+            prediction_entry.get("prediction")
+            or prediction_entry.get("label")
+            or ""
+        )
+
+    prediction_score = item.get("prediction_score")
+
+    if prediction_score is None:
+        prediction_score = prediction_entry.get("prediction_score")
+
+    if prediction_score is None:
+        prediction_score = prediction_entry.get("score")
+
+    prediction_source = (
+        item.get("prediction_source")
+        or prediction_entry.get("prediction_source")
+        or prediction_entry.get("source")
+        or ""
+    )
+
+    status = (
+        item.get("status")
+        or prediction_entry.get("status")
+        or ""
+    )
+
+    animals = item.get("animals")
+
+    if not isinstance(animals, list):
+        animals = prediction_entry.get("animals")
+
+    if not isinstance(animals, list):
+        animals = []
+
+    detections = prediction_entry.get("detections")
+
+    if not isinstance(detections, list):
+        detections = item.get("detections")
+
+    if not isinstance(detections, list):
+        detections = []
+
+    return {
+        "file_id": str(item["file_id"]),
+        "file_name": item.get("file_name") or "",
+        "file_url": item.get("file_url") or "",
+        "status": status,
+        "prediction": prediction,
+        "prediction_score": prediction_score,
+        "prediction_source": prediction_source,
+        "animals": animals,
+        "detections": detections,
+    }
+
 def import_speciesnet_results(uploaded_file):
     created = 0
     updated = 0
@@ -80,141 +165,204 @@ def import_speciesnet_results(uploaded_file):
         if not items:
             return
 
-        file_ids = [str(item["file_id"]) for item in items]
-
-        image_lookup = {
-            image.file_id: image
-            for image in ImageRecord.objects.filter(file_id__in=file_ids)
-        }
-
-        new_images = []
+        normalized_items = []
 
         for item in items:
-            file_id = str(item["file_id"])
+            try:
+                normalized_items.append(normalize_speciesnet_item(item))
+            except (KeyError, TypeError, ValueError) as error:
+                print("SpeciesNet normalization failed:", error)
+                failed += 1
 
-            if file_id not in image_lookup:
-                new_images.append(
-                    ImageRecord(
-                        file_id=file_id,
-                        file_name=item.get("file_name", ""),
-                        file_url=item.get("file_url", ""),
+        if not normalized_items:
+            return
+
+        file_ids = [
+            item["file_id"]
+            for item in normalized_items
+        ]
+
+        with transaction.atomic():
+            image_lookup = {
+                image.file_id: image
+                for image in ImageRecord.objects.filter(
+                    file_id__in=file_ids
+                )
+            }
+
+            new_images = []
+
+            for item in normalized_items:
+                file_id = item["file_id"]
+
+                if file_id not in image_lookup:
+                    new_images.append(
+                        ImageRecord(
+                            file_id=file_id,
+                            file_name=item["file_name"],
+                            file_url=item["file_url"],
+                        )
                     )
+
+            if new_images:
+                ImageRecord.objects.bulk_create(
+                    new_images,
+                    batch_size=batch_size,
+                    ignore_conflicts=True,
                 )
 
-        ImageRecord.objects.bulk_create(
-            new_images,
-            batch_size=batch_size,
-            ignore_conflicts=True,
-        )
+            # Reload because bulk_create(ignore_conflicts=True) does not
+            # reliably populate all created objects in image_lookup.
+            image_lookup = {
+                image.file_id: image
+                for image in ImageRecord.objects.filter(
+                    file_id__in=file_ids
+                )
+            }
 
-        image_lookup = {
-            image.file_id: image
-            for image in ImageRecord.objects.filter(file_id__in=file_ids)
-        }
-
-        existing_results = {
-            result.image.file_id: result
-            for result in SpeciesNetResult.objects.filter(
-                image__file_id__in=file_ids
-            ).select_related("image")
-        }
-
-        for result in existing_results.values():
-            result.species_detections.all().delete()
-
-        SpeciesNetResult.objects.filter(
-            image__file_id__in=file_ids
-        ).delete()
-
-        species_results = []
-
-        for item in items:
-            file_id = str(item["file_id"])
-            image = image_lookup.get(file_id)
-
-            if not image:
-                failed += 1
-                continue
-
-            species_results.append(
-                SpeciesNetResult(
-                    image=image,
-                    status=item.get("status") or "",
-                    prediction=item.get("prediction") or "",
-                    prediction_score=item.get("prediction_score"),
-                    prediction_source=item.get("prediction_source") or "",
-                    animals=item.get("animals") or [],
-                    detections=item.get("detections") or [],
+            existing_file_ids = set(
+                SpeciesNetResult.objects.filter(
+                    image__file_id__in=file_ids
+                ).values_list(
+                    "image__file_id",
+                    flat=True,
                 )
             )
 
-            if file_id in existing_results:
-                updated += 1
-            else:
-                created += 1
-
-        SpeciesNetResult.objects.bulk_create(
-            species_results,
-            batch_size=batch_size,
-        )
-
-        result_lookup = {
-            result.image.file_id: result
-            for result in SpeciesNetResult.objects.filter(
+            # Deleting SpeciesNetResult should delete SpeciesDetection rows
+            # automatically when the FK uses on_delete=models.CASCADE.
+            SpeciesNetResult.objects.filter(
                 image__file_id__in=file_ids
-            ).select_related("image")
-        }
+            ).delete()
 
-        detection_rows = []
+            species_results = []
 
-        for item in items:
-            file_id = str(item["file_id"])
-            species_result = result_lookup.get(file_id)
+            for item in normalized_items:
+                file_id = item["file_id"]
+                image = image_lookup.get(file_id)
 
-            if not species_result:
-                continue
+                if image is None:
+                    failed += 1
+                    continue
 
-            for animal in item.get("animals") or []:
-                bbox = animal.get("bbox") or []
-
-                detection_rows.append(
-                    SpeciesDetection(
-                        species_result=species_result,
-                        source="animal",
-                        label=animal.get("label", "").strip(),
-                        confidence=animal.get("score"),
-                        **bbox_values(bbox),
+                species_results.append(
+                    SpeciesNetResult(
+                        image=image,
+                        status=item["status"],
+                        prediction=item["prediction"],
+                        prediction_score=item["prediction_score"],
+                        prediction_source=item["prediction_source"],
+                        animals=item["animals"],
+                        detections=item["detections"],
                     )
                 )
 
-            for detection in item.get("detections") or []:
-                bbox = detection.get("bbox") or []
+                if file_id in existing_file_ids:
+                    updated += 1
+                else:
+                    created += 1
 
-                detection_rows.append(
-                    SpeciesDetection(
-                        species_result=species_result,
-                        source="detection",
-                        label=detection.get("label", "").strip(),
-                        confidence=detection.get("conf"),
-                        **bbox_values(bbox),
-                    )
+            if species_results:
+                SpeciesNetResult.objects.bulk_create(
+                    species_results,
+                    batch_size=batch_size,
                 )
 
-        SpeciesDetection.objects.bulk_create(
-            detection_rows,
-            batch_size=batch_size,
-        )
+            result_lookup = {
+                result.image.file_id: result
+                for result in SpeciesNetResult.objects.filter(
+                    image__file_id__in=file_ids
+                ).select_related("image")
+            }
+
+            detection_rows = []
+
+            for item in normalized_items:
+                file_id = item["file_id"]
+                species_result = result_lookup.get(file_id)
+
+                if species_result is None:
+                    continue
+
+                for animal in item["animals"]:
+                    if not isinstance(animal, dict):
+                        continue
+
+                    bbox = animal.get("bbox") or []
+
+                    label = (
+                        animal.get("label")
+                        or animal.get("taxonomy")
+                        or animal.get("category")
+                        or ""
+                    )
+
+                    confidence = animal.get("score")
+
+                    if confidence is None:
+                        confidence = animal.get("conf")
+
+                    detection_rows.append(
+                        SpeciesDetection(
+                            species_result=species_result,
+                            source="animal",
+                            label=str(label).strip(),
+                            confidence=confidence,
+                            **bbox_values(bbox),
+                        )
+                    )
+
+                for detection in item["detections"]:
+                    if not isinstance(detection, dict):
+                        continue
+
+                    bbox = detection.get("bbox") or []
+
+                    label = (
+                        detection.get("label")
+                        or detection.get("taxonomy")
+                        or detection.get("category")
+                        or ""
+                    )
+
+                    confidence = detection.get("conf")
+
+                    if confidence is None:
+                        confidence = detection.get("score")
+
+                    detection_rows.append(
+                        SpeciesDetection(
+                            species_result=species_result,
+                            source="detection",
+                            label=str(label).strip(),
+                            confidence=confidence,
+                            **bbox_values(bbox),
+                        )
+                    )
+
+            if detection_rows:
+                SpeciesDetection.objects.bulk_create(
+                    detection_rows,
+                    batch_size=batch_size,
+                )
 
     for raw_line in uploaded_file:
         try:
-            line = raw_line.decode("utf-8").strip()
+            if isinstance(raw_line, bytes):
+                line = raw_line.decode("utf-8").strip()
+            else:
+                line = raw_line.strip()
 
             if not line:
                 continue
 
             item = json.loads(line)
 
-            if "file_id" not in item:
+            if not isinstance(item, dict):
+                failed += 1
+                continue
+
+            if not item.get("file_id"):
                 failed += 1
                 continue
 
@@ -224,7 +372,10 @@ def import_speciesnet_results(uploaded_file):
                 flush_batch(pending_items)
                 pending_items = []
 
-        except Exception as error:
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as error:
             print("SpeciesNet parse failed:", error)
             failed += 1
 
@@ -234,91 +385,97 @@ def import_speciesnet_results(uploaded_file):
 
 ## OCR Management
 TEMPERATURE_F_PATTERN = re.compile(
-    r"^\s*(-?\d+(?:\.\d+)?)\s*°?\s*F\s*$",
+    r"(-?\d+(?:\.\d+)?)\s*°?\s*F",
     re.IGNORECASE,
 )
 
 DATE_PATTERN = re.compile(
-    r"^\s*(\d{1,2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{4})\s*$"
+    r"\b(\d{1,2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{4})\b"
 )
 
 TIME_PATTERN = re.compile(
-    r"^\s*(\d{1,2})\s*:\s*(\d{1,2})\s*:\s*(\d{1,2})\s*$"
+    r"\b(\d{1,2})\s*:\s*(\d{1,2})\s*:\s*(\d{1,2})\b"
 )
+
+
+def parse_capture_datetime(ocr_texts):
+    capture_date = None
+    capture_time = None
+
+    for raw_text in ocr_texts or []:
+        if not isinstance(raw_text, str):
+            continue
+
+        text = raw_text.strip()
+
+        if not text:
+            continue
+
+        if capture_date is None:
+            date_match = DATE_PATTERN.search(text)
+
+            if date_match:
+                try:
+                    month, day, year = map(int, date_match.groups())
+
+                    capture_date = datetime(
+                        year=year,
+                        month=month,
+                        day=day,
+                    ).date()
+                except ValueError:
+                    pass
+
+        if capture_time is None:
+            time_match = TIME_PATTERN.search(text)
+
+            if time_match:
+                try:
+                    hour, minute, second = map(int, time_match.groups())
+
+                    capture_time = datetime(
+                        year=2000,
+                        month=1,
+                        day=1,
+                        hour=hour,
+                        minute=minute,
+                        second=second,
+                    ).time()
+                except ValueError:
+                    pass
+
+        if capture_date is not None and capture_time is not None:
+            break
+
+    return capture_date, capture_time
 
 
 def parse_ocr_metadata(ocr_texts):
     """
     Extract Fahrenheit temperature, date, time, and combined datetime
     from a list of OCR strings.
-
-    Returns:
-        {
-            "temperature_f": float | None,
-            "capture_date": date | None,
-            "capture_time": time | None,
-            "capture_datetime": datetime | None,
-        }
     """
     temperature_f = None
-    capture_date = None
-    capture_time = None
 
     for raw_text in ocr_texts or []:
-        text = str(raw_text).strip()
+        if not isinstance(raw_text, str):
+            continue
+
+        text = raw_text.strip()
 
         if not text:
             continue
 
-        # Example: 66F, 66 F, 66°F
-        temperature_match = TEMPERATURE_F_PATTERN.fullmatch(text)
+        if temperature_f is None:
+            temperature_match = TEMPERATURE_F_PATTERN.search(text)
 
-        if temperature_match and temperature_f is None:
-            try:
-                temperature_f = float(temperature_match.group(1))
-            except ValueError:
-                pass
+            if temperature_match:
+                try:
+                    temperature_f = float(temperature_match.group(1))
+                except ValueError:
+                    pass
 
-        # Example: 10-10-2017 or 10/10/2017
-        date_match = DATE_PATTERN.fullmatch(text)
-
-        if date_match and capture_date is None:
-            try:
-                month = int(date_match.group(1))
-                day = int(date_match.group(2))
-                year = int(date_match.group(3))
-
-                capture_date = datetime(
-                    year=year,
-                    month=month,
-                    day=day,
-                ).date()
-            except ValueError:
-                pass
-
-        # Handles:
-        # 13:41:11
-        # 13 : 46 : 41
-        # 13 :49 : 46
-        # 13:49: 47
-        time_match = TIME_PATTERN.fullmatch(text)
-
-        if time_match and capture_time is None:
-            try:
-                hour = int(time_match.group(1))
-                minute = int(time_match.group(2))
-                second = int(time_match.group(3))
-
-                capture_time = datetime(
-                    year=2000,
-                    month=1,
-                    day=1,
-                    hour=hour,
-                    minute=minute,
-                    second=second,
-                ).time()
-            except ValueError:
-                pass
+    capture_date, capture_time = parse_capture_datetime(ocr_texts)
 
     capture_datetime = None
 
@@ -328,7 +485,6 @@ def parse_ocr_metadata(ocr_texts):
             capture_time,
         )
 
-        # Use a timezone-aware datetime when USE_TZ=True.
         if timezone.is_naive(capture_datetime):
             capture_datetime = timezone.make_aware(
                 capture_datetime,
@@ -343,27 +499,58 @@ def parse_ocr_metadata(ocr_texts):
     }
 
 def import_ocr_results(uploaded_file):
-    created_count = 0
-    updated_count = 0
-    failed_count = 0
+    """
+    Import PaddleOCR JSONL records.
+
+    Each line is expected to look similar to:
+
+    {
+        "status": "ok",
+        "file_id": "796153070989",
+        "file_name": "10100049.JPG",
+        "file_url": "https://app.box.com/file/796153070989",
+        "path": "/Ayu Project/...",
+        "ocr_texts": [
+            "Bushnell",
+            "84F29C",
+            "08-05-2022 09:11:12"
+        ]
+    }
+
+    Returns:
+        tuple[int, int, int]:
+            created_count,
+            updated_count,
+            failed_count
+    """
+    created = 0
+    updated = 0
+    failed = 0
 
     batch_size = 200
     pending_items = []
 
     def flush_batch(items):
-        nonlocal created_count, updated_count, failed_count
+        nonlocal created, updated, failed
 
         if not items:
             return
 
-        # Keep only the last OCR result for each file_id in this batch.
+        # If the same file_id appears multiple times in one batch,
+        # keep the final occurrence.
         items_by_file_id = {}
 
         for item in items:
-            file_id = str(item.get("file_id", "")).strip()
+            file_id = item.get("file_id")
+
+            if file_id is None:
+                failed += 1
+                continue
+
+            file_id = str(file_id).strip()
 
             if not file_id:
-                failed_count += 1
+                failed += 1
                 continue
 
             items_by_file_id[file_id] = item
@@ -373,19 +560,24 @@ def import_ocr_results(uploaded_file):
 
         file_ids = list(items_by_file_id.keys())
 
-        # Find ImageRecords already in the database.
-        image_lookup = {
-            image.file_id: image
-            for image in ImageRecord.objects.filter(
-                file_id__in=file_ids
-            )
-        }
+        with transaction.atomic():
+            # -------------------------------------------------------------
+            # Find or create the related ImageRecord objects
+            # -------------------------------------------------------------
 
-        # Build missing ImageRecords.
-        new_images = []
+            image_lookup = {
+                image.file_id: image
+                for image in ImageRecord.objects.filter(
+                    file_id__in=file_ids
+                )
+            }
 
-        for file_id, item in items_by_file_id.items():
-            if file_id not in image_lookup:
+            new_images = []
+
+            for file_id, item in items_by_file_id.items():
+                if file_id in image_lookup:
+                    continue
+
                 new_images.append(
                     ImageRecord(
                         file_id=file_id,
@@ -395,105 +587,115 @@ def import_ocr_results(uploaded_file):
                     )
                 )
 
-        if new_images:
-            ImageRecord.objects.bulk_create(
-                new_images,
-                batch_size=batch_size,
-                ignore_conflicts=True,
+            if new_images:
+                ImageRecord.objects.bulk_create(
+                    new_images,
+                    batch_size=batch_size,
+                    ignore_conflicts=True,
+                )
+
+            # Reload the images so newly created records are included and
+            # have database primary keys.
+            image_lookup = {
+                image.file_id: image
+                for image in ImageRecord.objects.filter(
+                    file_id__in=file_ids
+                )
+            }
+
+            # -------------------------------------------------------------
+            # Determine which OCR records are updates
+            # -------------------------------------------------------------
+
+            existing_file_ids = set(
+                OCRResult.objects.filter(
+                    image__file_id__in=file_ids
+                ).values_list(
+                    "image__file_id",
+                    flat=True,
+                )
             )
 
-        # Reload records so newly created objects have database IDs.
-        image_lookup = {
-            image.file_id: image
-            for image in ImageRecord.objects.filter(
-                file_id__in=file_ids
-            )
-        }
-
-        # Find OCR rows that already exist for this batch.
-        existing_results = {
-            result.image.file_id: result
-            for result in OCRResult.objects.filter(
+            # Because OCRResult is normally OneToOne with ImageRecord,
+            # remove the old rows before bulk-creating their replacements.
+            OCRResult.objects.filter(
                 image__file_id__in=file_ids
-            ).select_related("image")
-        }
+            ).delete()
 
-        results_to_create = []
-        results_to_update = []
+            # -------------------------------------------------------------
+            # Parse and create OCR results
+            # -------------------------------------------------------------
 
-        for file_id, item in items_by_file_id.items():
-            image = image_lookup.get(file_id)
+            ocr_results = []
 
-            if image is None:
-                failed_count += 1
-                continue
+            for file_id, item in items_by_file_id.items():
+                image = image_lookup.get(file_id)
 
-            ocr_texts = item.get("ocr_texts") or []
-            parsed_metadata = parse_ocr_metadata(ocr_texts)
+                if image is None:
+                    failed += 1
+                    continue
 
-            existing_result = existing_results.get(file_id)
+                ocr_texts = item.get("ocr_texts") or []
 
-            if existing_result:
-                existing_result.status = item.get("status") or ""
-                existing_result.ocr_texts = ocr_texts
-                existing_result.temperature_f = parsed_metadata["temperature_f"]
-                existing_result.capture_date = parsed_metadata["capture_date"]
-                existing_result.capture_time = parsed_metadata["capture_time"]
-                existing_result.capture_datetime = parsed_metadata["capture_datetime"]
+                if not isinstance(ocr_texts, list):
+                    failed += 1
+                    continue
 
-                results_to_update.append(existing_result)
-                updated_count += 1
+                metadata = parse_ocr_metadata(ocr_texts)
 
-            else:
-                results_to_create.append(
+                ocr_results.append(
                     OCRResult(
                         image=image,
                         status=item.get("status") or "",
                         ocr_texts=ocr_texts,
-                        temperature_f=parsed_metadata["temperature_f"],
-                        capture_date=parsed_metadata["capture_date"],
-                        capture_time=parsed_metadata["capture_time"],
-                        capture_datetime=parsed_metadata["capture_datetime"],
+                        temperature_f=metadata["temperature_f"],
+                        capture_date=metadata["capture_date"],
+                        capture_time=metadata["capture_time"],
+                        capture_datetime=metadata["capture_datetime"],
                     )
                 )
 
-                created_count += 1
+                if file_id in existing_file_ids:
+                    updated += 1
+                else:
+                    created += 1
 
-        if results_to_create:
-            OCRResult.objects.bulk_create(
-                results_to_create,
-                batch_size=batch_size,
-            )
+            if ocr_results:
+                OCRResult.objects.bulk_create(
+                    ocr_results,
+                    batch_size=batch_size,
+                )
 
-        if results_to_update:
-            OCRResult.objects.bulk_update(
-                results_to_update,
-                fields=[
-                    "status",
-                    "ocr_texts",
-                    "temperature_f",
-                    "capture_date",
-                    "capture_time",
-                    "capture_datetime",
-                ],
-                batch_size=batch_size,
-            )
+    # ---------------------------------------------------------------------
+    # Read the uploaded JSONL file
+    # ---------------------------------------------------------------------
 
     for line_number, raw_line in enumerate(uploaded_file, start=1):
         try:
-            line = raw_line.decode("utf-8").strip()
+            if isinstance(raw_line, bytes):
+                line = raw_line.decode("utf-8").strip()
+            else:
+                line = str(raw_line).strip()
 
             if not line:
                 continue
 
             item = json.loads(line)
 
-            if "file_id" not in item:
+            if not isinstance(item, dict):
                 print(
-                    f"OCR import line {line_number} failed: "
-                    "missing file_id"
+                    f"OCR import failed on line {line_number}: "
+                    "JSON value is not an object."
                 )
-                failed_count += 1
+                failed += 1
+                continue
+
+            if not item.get("file_id"):
+                print(
+                    f"OCR import failed on line {line_number}: "
+                    "missing file_id."
+                )
+                failed += 1
                 continue
 
             pending_items.append(item)
@@ -502,19 +704,25 @@ def import_ocr_results(uploaded_file):
                 flush_batch(pending_items)
                 pending_items = []
 
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        except UnicodeDecodeError as error:
             print(
-                f"OCR import line {line_number} failed: {error}"
+                f"OCR decoding failed on line {line_number}: {error}"
             )
-            failed_count += 1
+            failed += 1
+
+        except json.JSONDecodeError as error:
+            print(
+                f"OCR JSON parsing failed on line {line_number}: {error}"
+            )
+            failed += 1
 
         except Exception as error:
             print(
-                f"OCR import line {line_number} failed unexpectedly: "
-                f"{error}"
+                f"OCR import failed on line {line_number}: "
+                f"{type(error).__name__}: {error}"
             )
-            failed_count += 1
+            failed += 1
 
     flush_batch(pending_items)
 
-    return created_count, updated_count, failed_count
+    return created, updated, failed

@@ -13,6 +13,8 @@ __pycache__/
 *.swp
 .DS_Store
 *.JPG
+# except wild-basin-hero.jpg
+!wild-basin-hero.jpg
 
 # Django media cache
 wildlife_viewer/media/

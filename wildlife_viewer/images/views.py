@@ -111,13 +111,6 @@ def species_search(request):
         if normalized_label in seen_labels:
             continue
 
-        # Extra safety in case the taxonomy text uses an unusual format.
-        if (
-            not user_is_researcher(request.user)
-            and is_human_label(label)
-        ):
-            continue
-
         seen_labels.add(normalized_label)
         labels.append(label)
 

@@ -224,6 +224,7 @@ def validate_ocr_file(file):
         file_label="OCR",
     )
 
+# upload forms for Box metadata, SpeciesNet results, and OCR results
 
 class BoxImageMetadataUploadForm(forms.Form):
     metadata_file = forms.FileField(
@@ -263,22 +264,74 @@ class GalleryFilterForm(forms.Form):
     end_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
 
 
-class SpeciesNetEditForm(forms.ModelForm):
-    class Meta:
-        model = SpeciesNetResult
-        fields = ["status", "prediction", "prediction_score", "prediction_source", "animals", "detections"]
 
 class OCREditForm(forms.ModelForm):
     class Meta:
         model = OCRResult
         fields = ["status", "ocr_texts", "temperature_f", "capture_date", "capture_time", "capture_datetime"]
 
+# SpeciesNetEditForm and SpeciesDetectionEditForm are defined below, along with a formset for SpeciesDetection.
+
+DETECTION_LABEL_CHOICES = [
+    ("animal", "animal"),
+    ("human", "human"),
+    ("vehicle", "vehicle"),
+]
+
+class SpeciesNetEditForm(forms.ModelForm):
+    prediction = forms.CharField(
+        required=False,
+        widget=forms.Select(
+            attrs={
+                "class": "species-prediction-autocomplete",
+                "data-placeholder": "Search for a species...",
+            }
+        ),
+    )
+
+    class Meta:
+        model = SpeciesNetResult
+        fields = [
+            "status",
+            "prediction",
+            "prediction_score",
+            "prediction_source",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        current_prediction = self.instance.prediction if self.instance.pk else ""
+
+        choices = [("", "")]
+
+        if current_prediction:
+            display_prediction = current_prediction.split(";")[-1].strip()
+
+            choices.append(
+                (
+                    current_prediction,
+                    display_prediction or current_prediction,
+                )
+            )
+
+        self.fields["prediction"].widget.choices = choices
+
+
+class SpeciesDetectionEditForm(forms.ModelForm):
+    label = forms.ChoiceField(
+        choices=DETECTION_LABEL_CHOICES,
+        required=True,
+    )
+
+    class Meta:
+        model = SpeciesDetection
+        fields = ["label"]
+
 
 SpeciesDetectionFormSet = modelformset_factory(
     SpeciesDetection,
-    fields=[
-        "label",
-    ],
+    form=SpeciesDetectionEditForm,
     extra=0,
     can_delete=True,
 )

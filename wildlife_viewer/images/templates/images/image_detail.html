@@ -50,7 +50,7 @@
         </section>
 
         <section class="card detail-card">
-            <h2>Current Metadata</h2>
+            <h2>File Metadata</h2>
 
             <div class="meta-row">
                 <strong>File ID</strong>
@@ -62,42 +62,30 @@
                 <span>{{ image.file_name|default:"—" }}</span>
             </div>
 
-            <div class="meta-row">
-                <strong>Path</strong>
-                <span>{{ image.path|default:"—" }}</span>
-            </div>
-
-            <div class="meta-row">
-                <strong>Box URL</strong>
-
-                {% if image.file_url %}
-                    <a
-                        href="{{ image.file_url }}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        {{ image.file_url }}
-                    </a>
-                {% else %}
-                    <span>—</span>
-                {% endif %}
-            </div>
-
             {% if can_edit %}
+
                 <div class="meta-row">
-                    <strong>Direct Download URL</strong>
-                    <span>
-                        {{ image.direct_download_url|default:"—" }}
-                    </span>
+                    <strong>Path</strong>
+                    <span>{{ image.path|default:"—" }}</span>
                 </div>
 
                 <div class="meta-row">
-                    <strong>Preview URL</strong>
-                    <span>
-                        {{ image.preview_url|default:"—" }}
-                    </span>
+                    <strong>Box URL</strong>
+
+                    {% if image.file_url %}
+                        <a
+                            href="{{ image.file_url }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {{ image.file_url }}
+                        </a>
+                    {% else %}
+                        <span>—</span>
+                    {% endif %}
                 </div>
             {% endif %}
+
         </section>
     </div>
 
@@ -107,6 +95,7 @@
             <h2>Species Detections</h2>
 
             {% if can_edit %}
+
                 {{ detection_formset.management_form }}
 
                 <table class="clean-table editable-detections-table">
@@ -127,14 +116,16 @@
 
                                 <td>
                                     {{ form.label }}
+
+                                    {% for error in form.label.errors %}
+                                        <div class="form-error">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
                                 </td>
 
                                 <td>
-                                    {% if species_result %}
-                                        {{ species_result.display_prediction|default:"—" }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    {{ species_result.display_prediction|default:"—" }}
                                 </td>
 
                                 <td>
@@ -146,12 +137,16 @@
                                 </td>
 
                                 <td>
-                                    (
-                                    {{ form.instance.bbox_x|floatformat:3 }},
-                                    {{ form.instance.bbox_y|floatformat:3 }},
-                                    {{ form.instance.bbox_width|floatformat:3 }},
-                                    {{ form.instance.bbox_height|floatformat:3 }}
-                                    )
+                                    {% if form.instance.bbox_x is not None %}
+                                        (
+                                        {{ form.instance.bbox_x|floatformat:3 }},
+                                        {{ form.instance.bbox_y|floatformat:3 }},
+                                        {{ form.instance.bbox_width|floatformat:3 }},
+                                        {{ form.instance.bbox_height|floatformat:3 }}
+                                        )
+                                    {% else %}
+                                        —
+                                    {% endif %}
                                 </td>
 
                                 <td style="text-align: center;">
@@ -175,10 +170,7 @@
                             <th>Label</th>
                             <th>Prediction</th>
                             <th>Confidence</th>
-                            <th>BBox X</th>
-                            <th>BBox Y</th>
-                            <th>BBox W</th>
-                            <th>BBox H</th>
+                            <th>Bounding Box</th>
                         </tr>
                     </thead>
 
@@ -187,7 +179,7 @@
                             {% for detection in detections %}
                                 <tr>
                                     <td>
-                                        {{ detection.label|default:"—" }}
+                                        {{ detection.get_label_display|default:detection.label|default:"—" }}
                                     </td>
 
                                     <td>
@@ -204,31 +196,12 @@
 
                                     <td>
                                         {% if detection.bbox_x is not None %}
-                                            {{ detection.bbox_x|floatformat:3 }}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                    </td>
-
-                                    <td>
-                                        {% if detection.bbox_y is not None %}
-                                            {{ detection.bbox_y|floatformat:3 }}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                    </td>
-
-                                    <td>
-                                        {% if detection.bbox_width is not None %}
-                                            {{ detection.bbox_width|floatformat:3 }}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                    </td>
-
-                                    <td>
-                                        {% if detection.bbox_height is not None %}
+                                            (
+                                            {{ detection.bbox_x|floatformat:3 }},
+                                            {{ detection.bbox_y|floatformat:3 }},
+                                            {{ detection.bbox_width|floatformat:3 }},
                                             {{ detection.bbox_height|floatformat:3 }}
+                                            )
                                         {% else %}
                                             —
                                         {% endif %}
@@ -236,14 +209,14 @@
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="7">
+                                    <td colspan="4">
                                         No SpeciesNet detections.
                                     </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7">
+                                <td colspan="4">
                                     No SpeciesNet result.
                                 </td>
                             </tr>
@@ -347,4 +320,53 @@
     {% endif %}
 
 </div>
+{% if can_edit %}
+<script>
+    $(document).ready(function () {
+        const predictionInput = $(".species-prediction-autocomplete");
+
+        predictionInput.select2({
+            width: "100%",
+            placeholder: "Search for a species...",
+            allowClear: true,
+            tags: true,
+            minimumInputLength: 1,
+
+            ajax: {
+                url: "{% url 'species_search' %}",
+                dataType: "json",
+                delay: 250,
+
+                data: function (params) {
+                    return {
+                        q: params.term || ""
+                    };
+                },
+
+                processResults: function (data) {
+                    return {
+                        results: data.results || []
+                    };
+                },
+
+                cache: true
+            },
+
+            createTag: function (params) {
+                const value = $.trim(params.term);
+
+                if (!value) {
+                    return null;
+                }
+
+                return {
+                    id: value,
+                    text: value,
+                    newTag: true
+                };
+            }
+        });
+    });
+</script>
+{% endif %}
 {% endblock %}

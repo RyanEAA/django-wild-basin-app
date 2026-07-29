@@ -6,6 +6,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path("", views.gallery, name="gallery"),
     path("image/<str:file_id>/", views.image_detail, name="image_detail"),  
+    path("export/csv/", views.export_csv, name="export_csv"),
     
     path("ajax/species-search/", views.species_search, name="species_search"),
 

@@ -26,7 +26,19 @@
     <div class="detail-header">
         <h1>{{ image.file_name }}</h1>
 
-        {% if species_result %}
+        {% if can_edit %}
+            <div class="prediction-editor">
+                <label for="{{ species_form.prediction.id_for_label|default:'id_prediction' }}">
+                    Prediction
+                </label>
+                {{ species_form.prediction }}
+                {% for error in species_form.prediction.errors %}
+                    <div class="form-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% elif species_result %}
             <span class="badge">
                 {{ species_result.display_prediction|default:"SpeciesNet result" }}
             </span>

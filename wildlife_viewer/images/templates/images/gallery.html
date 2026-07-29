@@ -45,8 +45,10 @@
     </div>
 
     <br>
-    <button class="btn-primary" type="submit">Apply Filters</button>
-    <a class="btn-link" href="{% url 'gallery' %}">Clear Filters</a>
+        <button class="btn-primary" type="submit">Apply Filters</button>
+        <a class="btn-link" href="{% url 'gallery' %}">Clear Filters</a>
+        <a class="btn-primary" href="{% url 'export_csv' %}{% if query_string %}?{{ query_string }}{% endif %}">Export CSV</a>
+    </br>
 </form>
 
 <div class="gallery-grid">

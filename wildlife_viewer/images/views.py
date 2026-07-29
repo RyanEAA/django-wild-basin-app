@@ -1,14 +1,16 @@
+import csv
+
 from django.shortcuts import render
 import time
 # Create your views here.
 import json
 
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.urls import reverse
 
 from .decorators import researcher_required
@@ -66,6 +68,174 @@ def clean_species_label(label):
             return parts[-1]
 
     return label
+
+
+def _format_capture_datetime(ocr_result):
+    capture_date = ""
+    capture_time = ""
+
+    if not ocr_result:
+        return capture_date, capture_time
+
+    if ocr_result.capture_datetime:
+        capture_date = ocr_result.capture_datetime.date().isoformat()
+        capture_time = ocr_result.capture_datetime.strftime("%H:%M:%S")
+        return capture_date, capture_time
+
+    if ocr_result.capture_date:
+        capture_date = ocr_result.capture_date.isoformat()
+
+    if ocr_result.capture_time:
+        capture_time = ocr_result.capture_time.strftime("%H:%M:%S")
+
+    return capture_date, capture_time
+
+
+def export_csv(request):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = (
+        'attachment; filename="wild_basin_image_export.csv"'
+    )
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "image_name",
+        "box_directory",
+        "prediction",
+        "detection",
+        "date",
+        "time",
+    ])
+
+    _, images, _ = _build_gallery_queryset(request)
+    images = images.prefetch_related(
+        Prefetch(
+            "species_result__species_detections",
+            queryset=SpeciesDetection.objects.order_by("id"),
+        )
+    )
+
+    for image in images:
+        species_result = getattr(image, "species_result", None)
+        ocr_result = getattr(image, "ocr_result", None)
+        capture_date, capture_time = _format_capture_datetime(ocr_result)
+        prediction = clean_species_label(species_result.prediction) if species_result else ""
+
+        detections = []
+
+        if species_result:
+            detections = [
+                detection.label.strip()
+                for detection in species_result.species_detections.all()
+                if detection.label and detection.label.strip()
+            ]
+
+        if not detections:
+            detections = [""]
+
+        for detection_label in detections:
+            writer.writerow([
+                image.file_name,
+                image.path,
+                prediction,
+                detection_label,
+                capture_date,
+                capture_time,
+            ])
+
+    return response
+
+
+def _build_gallery_queryset(request):
+    is_researcher = user_is_researcher(request.user)
+
+    images = (
+        ImageRecord.objects
+        .select_related(
+            "species_result",
+            "ocr_result",
+        )
+        .order_by("-created_at")
+    )
+
+    # Public users must not see images where either the image-level
+    # prediction or an individual detection identifies a human.
+    if not is_researcher:
+        images = images.exclude(
+            Q(species_result__prediction__icontains="human")
+            | Q(
+                species_result__species_detections__label__icontains="human"
+            )
+        )
+
+    form = GalleryFilterForm(request.GET)
+
+    if form.is_valid():
+        search = form.cleaned_data.get("search")
+        species = form.cleaned_data.get("species")
+        has_ocr = form.cleaned_data.get("has_ocr")
+        has_speciesnet = form.cleaned_data.get("has_speciesnet")
+        min_score = form.cleaned_data.get("min_score")
+        start_date = form.cleaned_data.get("start_date")
+        end_date = form.cleaned_data.get("end_date")
+
+        if search:
+            images = images.filter(
+                Q(file_name__icontains=search)
+                | Q(file_id__icontains=search)
+                | Q(path__icontains=search)
+                | Q(ocr_result__ocr_texts__icontains=search)
+                | Q(species_result__prediction__icontains=search)
+                | Q(
+                    species_result__species_detections__label__icontains=search
+                )
+            )
+
+        if species:
+            selected_species = [
+                item.strip()
+                for item in species.split(",")
+                if item.strip()
+            ]
+
+            if selected_species:
+                species_query = Q()
+
+                for selected_label in selected_species:
+                    species_query |= Q(
+                        species_result__prediction__icontains=selected_label
+                    )
+
+                images = images.filter(species_query)
+
+        if has_ocr:
+            images = images.filter(
+                ocr_result__isnull=False
+            )
+
+        if has_speciesnet:
+            images = images.filter(
+                species_result__isnull=False
+            )
+
+        # This now filters by the image-level SpeciesNet classification
+        # confidence rather than the generic detector-box confidence.
+        if min_score is not None:
+            images = images.filter(
+                species_result__prediction_score__gte=min_score
+            )
+
+        if start_date:
+            images = images.filter(
+                ocr_result__capture_date__gte=start_date
+            )
+
+        if end_date:
+            images = images.filter(
+                ocr_result__capture_date__lte=end_date
+            )
+
+    return form, images.distinct(), is_researcher
 
 
 def species_search(request):
@@ -259,97 +429,7 @@ def cache_image_ajax(request, file_id):
     })
 
 def gallery(request):
-    is_researcher = user_is_researcher(request.user)
-
-    images = (
-        ImageRecord.objects
-        .select_related(
-            "species_result",
-            "ocr_result",
-        )
-        .order_by("-created_at")
-    )
-
-    # Public users must not see images where either the image-level
-    # prediction or an individual detection identifies a human.
-    if not is_researcher:
-        images = images.exclude(
-            Q(species_result__prediction__icontains="human")
-            | Q(
-                species_result__species_detections__label__icontains="human"
-            )
-        )
-
-    form = GalleryFilterForm(request.GET)
-
-    if form.is_valid():
-        search = form.cleaned_data.get("search")
-        species = form.cleaned_data.get("species")
-        has_ocr = form.cleaned_data.get("has_ocr")
-        has_speciesnet = form.cleaned_data.get("has_speciesnet")
-        min_score = form.cleaned_data.get("min_score")
-        start_date = form.cleaned_data.get("start_date")
-        end_date = form.cleaned_data.get("end_date")
-
-        if search:
-            images = images.filter(
-                Q(file_name__icontains=search)
-                | Q(file_id__icontains=search)
-                | Q(path__icontains=search)
-                | Q(ocr_result__ocr_texts__icontains=search)
-                | Q(species_result__prediction__icontains=search)
-                | Q(
-                    species_result__species_detections__label__icontains=search
-                )
-            )
-
-        if species:
-            selected_species = [
-                item.strip()
-                for item in species.split(",")
-                if item.strip()
-            ]
-
-            if selected_species:
-                species_query = Q()
-
-                for selected_label in selected_species:
-                    species_query |= Q(
-                        species_result__prediction__icontains=selected_label
-                    )
-
-                images = images.filter(species_query)
-
-        if has_ocr:
-            images = images.filter(
-                ocr_result__isnull=False
-            )
-
-        if has_speciesnet:
-            images = images.filter(
-                species_result__isnull=False
-            )
-
-        # This now filters by the image-level SpeciesNet classification
-        # confidence rather than the generic detector-box confidence.
-        if min_score is not None:
-            images = images.filter(
-                species_result__prediction_score__gte=min_score
-            )
-
-        if start_date:
-            images = images.filter(
-                ocr_result__capture_date__gte=start_date
-            )
-
-        if end_date:
-            images = images.filter(
-                ocr_result__capture_date__lte=end_date
-            )
-
-    # Joins against SpeciesDetection can produce duplicate ImageRecord rows,
-    # especially during the public human exclusion and free-text search.
-    images = images.distinct()
+    form, images, is_researcher = _build_gallery_queryset(request)
 
     paginator = Paginator(images, 20)
     page_obj = paginator.get_page(

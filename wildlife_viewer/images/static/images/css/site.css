@@ -47,7 +47,8 @@ body {
 .site-nav {
     display: flex;
     align-items: center;
-    gap: 36px;   /* Adjust this value to taste */
+    gap: 36px;
+    /* Adjust this value to taste */
 }
 
 .site-nav a {
@@ -90,8 +91,8 @@ body {
 }
 
 .hero {
-    background: linear-gradient(rgba(15,45,70,.75), rgba(15,45,70,.75)),
-                url("/static/images/img/hero.avif");
+    background: linear-gradient(rgba(15, 45, 70, .75), rgba(15, 45, 70, .75)),
+        url("/static/images/img/hero.avif");
     background-size: cover;
     background-position: center;
     color: #fefefe;
@@ -119,7 +120,7 @@ body {
     background: white;
     border: 1px solid var(--border);
     border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,.05);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .05);
 }
 
 .filter-card {
@@ -134,7 +135,8 @@ body {
     align-items: end;
 }
 
-input, select {
+input,
+select {
     padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -148,6 +150,8 @@ input, select {
     border-radius: 6px;
     font-weight: bold;
     cursor: pointer;
+    display: inline-block;
+    text-decoration: none;
 }
 
 .btn-link {
@@ -263,7 +267,7 @@ input, select {
     border-radius: 12px;
     padding: 32px;
     margin-bottom: 24px;
-    box-shadow: 0 4px 14px rgba(0,0,0,.05);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .05);
 }
 
 .content-card h2 {
@@ -349,11 +353,11 @@ input, select {
     margin-top: 24px;
 }
 
-.detail-grid > .wide {
+.detail-grid>.wide {
     flex: 1;
 }
 
-.detail-grid > .detail-card:not(.wide) {
+.detail-grid>.detail-card:not(.wide) {
     width: 360px;
     flex-shrink: 0;
 }

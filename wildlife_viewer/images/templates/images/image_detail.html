@@ -17,37 +17,35 @@
         {% endfor %}
     {% endif %}
 
+
     {% if can_edit %}
         <form method="post">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ back_url }}">
     {% endif %}
 
+
     <div class="detail-header">
+
         <h1>{{ image.file_name }}</h1>
 
-        {% if can_edit %}
-            <div class="prediction-editor">
-                <label for="{{ species_form.prediction.id_for_label|default:'id_prediction' }}">
-                    Prediction
-                </label>
-                {{ species_form.prediction }}
-                {% for error in species_form.prediction.errors %}
-                    <div class="form-error">
-                        {{ error }}
-                    </div>
-                {% endfor %}
-            </div>
-        {% elif species_result %}
+        {% if not can_edit and species_result %}
             <span class="badge">
                 {{ species_result.display_prediction|default:"SpeciesNet result" }}
             </span>
         {% endif %}
+
     </div>
+
 
     <div class="detail-layout">
 
+        <!-- ========================================================= -->
+        <!-- IMAGE -->
+        <!-- ========================================================= -->
+
         <section class="image-panel">
+
             {% if image_url %}
                 <img
                     src="{{ image_url }}"
@@ -59,9 +57,16 @@
                     No cached image available.
                 </div>
             {% endif %}
+
         </section>
 
+
+        <!-- ========================================================= -->
+        <!-- FILE METADATA -->
+        <!-- ========================================================= -->
+
         <section class="card detail-card">
+
             <h2>File Metadata</h2>
 
             <div class="meta-row">
@@ -74,6 +79,7 @@
                 <span>{{ image.file_name|default:"—" }}</span>
             </div>
 
+
             {% if can_edit %}
 
                 <div class="meta-row">
@@ -81,10 +87,13 @@
                     <span>{{ image.path|default:"—" }}</span>
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>Box URL</strong>
 
                     {% if image.file_url %}
+
                         <a
                             href="{{ image.file_url }}"
                             target="_blank"
@@ -92,293 +101,598 @@
                         >
                             {{ image.file_url }}
                         </a>
+
                     {% else %}
+
                         <span>—</span>
+
                     {% endif %}
+
                 </div>
+
             {% endif %}
 
         </section>
+
     </div>
+
 
     <div class="detail-grid">
 
+        <!-- ========================================================= -->
+        <!-- SPECIES DETECTIONS -->
+        <!-- ========================================================= -->
+
         <section class="card detail-card wide">
+
             <h2>Species Detections</h2>
+
 
             {% if can_edit %}
 
                 {{ detection_formset.management_form }}
 
+                {% if detection_formset.non_form_errors %}
+                    <div class="form-error">
+                        {{ detection_formset.non_form_errors }}
+                    </div>
+                {% endif %}
+
+
                 <table class="clean-table editable-detections-table">
+
                     <thead>
                         <tr>
-                            <th>Label</th>
+                            <th>Detection</th>
                             <th>Prediction</th>
-                            <th>Confidence</th>
+                            <th>Detection Confidence</th>
+                            <th>Prediction Confidence</th>
                             <th>Bounding Box</th>
                             <th>Delete</th>
                         </tr>
                     </thead>
 
+
                     <tbody>
+
                         {% for form in detection_formset %}
+
                             <tr>
+
                                 {{ form.id }}
 
-                                <td>
-                                    {{ form.label }}
 
-                                    {% for error in form.label.errors %}
+                                <!-- ================================================= -->
+                                <!-- DETECTION TYPE -->
+                                <!-- ================================================= -->
+
+                                <td>
+
+                                    {{ form.detection_type }}
+
+                                    {% for error in form.detection_type.errors %}
                                         <div class="form-error">
                                             {{ error }}
                                         </div>
                                     {% endfor %}
+
                                 </td>
 
-                                <td>
-                                    {{ species_result.display_prediction|default:"—" }}
-                                </td>
+
+                                <!-- ================================================= -->
+                                <!-- INDIVIDUAL SPECIES PREDICTION -->
+                                <!-- ================================================= -->
 
                                 <td>
-                                    {% if form.instance.confidence is not None %}
-                                        {{ form.instance.confidence|floatformat:3 }}
+
+                                    {{ form.prediction }}
+
+                                    {% for error in form.prediction.errors %}
+                                        <div class="form-error">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+
+                                </td>
+
+
+                                <!-- ================================================= -->
+                                <!-- DETECTOR CONFIDENCE -->
+                                <!-- ================================================= -->
+
+                                <td>
+
+                                    {% if form.instance.detection_confidence is not None %}
+                                        {{ form.instance.detection_confidence|floatformat:3 }}
                                     {% else %}
                                         —
                                     {% endif %}
+
                                 </td>
 
+
+                                <!-- ================================================= -->
+                                <!-- SPECIES PREDICTION CONFIDENCE -->
+                                <!-- ================================================= -->
+
                                 <td>
+
+                                    {% if form.instance.prediction_score is not None %}
+                                        {{ form.instance.prediction_score|floatformat:3 }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+
+                                </td>
+
+
+                                <!-- ================================================= -->
+                                <!-- BOUNDING BOX -->
+                                <!-- ================================================= -->
+
+                                <td>
+
                                     {% if form.instance.bbox_x is not None %}
+
                                         (
-                                        {{ form.instance.bbox_x|floatformat:3 }},
-                                        {{ form.instance.bbox_y|floatformat:3 }},
-                                        {{ form.instance.bbox_width|floatformat:3 }},
-                                        {{ form.instance.bbox_height|floatformat:3 }}
+                                            {{ form.instance.bbox_x|floatformat:3 }},
+                                            {{ form.instance.bbox_y|floatformat:3 }},
+                                            {{ form.instance.bbox_width|floatformat:3 }},
+                                            {{ form.instance.bbox_height|floatformat:3 }}
                                         )
+
                                     {% else %}
+
                                         —
+
                                     {% endif %}
+
                                 </td>
+
+
+                                <!-- ================================================= -->
+                                <!-- DELETE -->
+                                <!-- ================================================= -->
 
                                 <td style="text-align: center;">
+
                                     {{ form.DELETE }}
+
                                 </td>
+
                             </tr>
+
+
                         {% empty %}
+
                             <tr>
-                                <td colspan="5">
-                                    No editable SpeciesNet detections.
+                                <td colspan="6">
+                                    No SpeciesNet detections.
                                 </td>
                             </tr>
+
                         {% endfor %}
+
                     </tbody>
+
                 </table>
 
+
             {% else %}
+
+                <!-- ========================================================= -->
+                <!-- PUBLIC / READ-ONLY DETECTION TABLE -->
+                <!-- ========================================================= -->
+
                 <table class="clean-table">
+
                     <thead>
                         <tr>
-                            <th>Label</th>
+                            <th>Detection</th>
                             <th>Prediction</th>
                             <th>Confidence</th>
                             <th>Bounding Box</th>
                         </tr>
                     </thead>
 
+
                     <tbody>
+
                         {% if species_result %}
+
                             {% for detection in detections %}
+
                                 <tr>
-                                    <td>
-                                        {{ detection.get_label_display|default:detection.label|default:"—" }}
-                                    </td>
+
+                                    <!-- Detection type -->
 
                                     <td>
-                                        {{ species_result.display_prediction|default:"—" }}
+
+                                        {{ detection.get_detection_type_display|default:detection.detection_type|default:"—" }}
+
                                     </td>
 
+
+                                    <!-- Per-detection species prediction -->
+
                                     <td>
-                                        {% if detection.confidence is not None %}
-                                            {{ detection.confidence|floatformat:3 }}
+
+                                        {{ detection.display_prediction|default:"—" }}
+
+                                    </td>
+
+
+                                    <!-- Detection confidence -->
+
+                                    <td>
+
+                                        {% if detection.detection_confidence is not None %}
+
+                                            {{ detection.detection_confidence|floatformat:3 }}
+
                                         {% else %}
+
                                             —
+
                                         {% endif %}
+
                                     </td>
 
+
+                                    <!-- Bounding box -->
+
                                     <td>
+
                                         {% if detection.bbox_x is not None %}
+
                                             (
-                                            {{ detection.bbox_x|floatformat:3 }},
-                                            {{ detection.bbox_y|floatformat:3 }},
-                                            {{ detection.bbox_width|floatformat:3 }},
-                                            {{ detection.bbox_height|floatformat:3 }}
+                                                {{ detection.bbox_x|floatformat:3 }},
+                                                {{ detection.bbox_y|floatformat:3 }},
+                                                {{ detection.bbox_width|floatformat:3 }},
+                                                {{ detection.bbox_height|floatformat:3 }}
                                             )
+
                                         {% else %}
+
                                             —
+
                                         {% endif %}
+
                                     </td>
+
                                 </tr>
+
+
                             {% empty %}
+
                                 <tr>
                                     <td colspan="4">
                                         No SpeciesNet detections.
                                     </td>
                                 </tr>
+
                             {% endfor %}
+
+
                         {% else %}
+
                             <tr>
                                 <td colspan="4">
                                     No SpeciesNet result.
                                 </td>
                             </tr>
+
                         {% endif %}
+
                     </tbody>
+
                 </table>
+
             {% endif %}
+
+
+            <!-- ========================================================= -->
+            <!-- ORIGINAL IMAGE-LEVEL SPECIESNET RESULT -->
+            <!-- ========================================================= -->
+
+            {% if can_edit and species_result %}
+
+                <div class="speciesnet-image-result">
+
+                    <h3>Original SpeciesNet Image Result</h3>
+
+                    <div class="meta-row">
+                        <strong>Prediction</strong>
+                        <span>
+                            {{ species_result.display_prediction|default:"—" }}
+                        </span>
+                    </div>
+
+                    <div class="meta-row">
+                        <strong>Confidence</strong>
+
+                        <span>
+                            {% if species_result.prediction_score is not None %}
+                                {{ species_result.prediction_score|floatformat:3 }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <div class="meta-row">
+                        <strong>Source</strong>
+                        <span>
+                            {{ species_result.prediction_source|default:"—" }}
+                        </span>
+                    </div>
+
+                    {% if species_result.model_version %}
+
+                        <div class="meta-row">
+                            <strong>Model Version</strong>
+                            <span>
+                                {{ species_result.model_version }}
+                            </span>
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
+
         </section>
 
+
+        <!-- ========================================================= -->
+        <!-- OCR -->
+        <!-- ========================================================= -->
+
         <section class="card detail-card">
+
             <h2>OCR</h2>
 
+
             {% if can_edit %}
+
                 <div class="meta-row">
+
                     <strong>Status</strong>
+
                     {{ ocr_form.status }}
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>OCR Texts</strong>
+
                     {{ ocr_form.ocr_texts }}
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>Temperature</strong>
+
                     {{ ocr_form.temperature_f }}
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>Date</strong>
+
                     {{ ocr_form.capture_date }}
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>Time</strong>
+
                     {{ ocr_form.capture_time }}
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>DateTime</strong>
+
                     {{ ocr_form.capture_datetime }}
+
                 </div>
+
 
             {% elif ocr_result %}
+
                 <div class="meta-row">
+
                     <strong>Status</strong>
-                    <span>{{ ocr_result.status|default:"—" }}</span>
-                </div>
 
-                <div class="meta-row">
-                    <strong>OCR Texts</strong>
-                    <span>{{ ocr_result.ocr_texts|default:"—" }}</span>
-                </div>
-
-                <div class="meta-row">
-                    <strong>Temperature</strong>
                     <span>
+                        {{ ocr_result.status|default:"—" }}
+                    </span>
+
+                </div>
+
+
+                <div class="meta-row">
+
+                    <strong>OCR Texts</strong>
+
+                    <span>
+                        {{ ocr_result.ocr_texts|default:"—" }}
+                    </span>
+
+                </div>
+
+
+                <div class="meta-row">
+
+                    <strong>Temperature</strong>
+
+                    <span>
+
                         {% if ocr_result.temperature_f is not None %}
                             {{ ocr_result.temperature_f }} °F
                         {% else %}
                             —
                         {% endif %}
+
                     </span>
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>Date</strong>
+
                     <span>
                         {{ ocr_result.capture_date|default:"—" }}
                     </span>
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>Time</strong>
+
                     <span>
                         {{ ocr_result.capture_time|default:"—" }}
                     </span>
+
                 </div>
 
+
                 <div class="meta-row">
+
                     <strong>DateTime</strong>
+
                     <span>
                         {{ ocr_result.capture_datetime|default:"—" }}
                     </span>
+
                 </div>
 
+
             {% else %}
-                <p>No OCR result.</p>
+
+                <p>
+                    No OCR result.
+                </p>
+
             {% endif %}
+
         </section>
+
     </div>
 
+
+    <!-- ============================================================= -->
+    <!-- SAVE -->
+    <!-- ============================================================= -->
+
     {% if can_edit %}
+
         <div class="save-bar">
-            <button class="btn-primary" type="submit">
+
+            <button
+                class="btn-primary"
+                type="submit"
+            >
                 Save Changes
             </button>
+
         </div>
 
         </form>
+
     {% endif %}
 
 </div>
+
+
+<!-- ================================================================= -->
+<!-- DETECTION PREDICTION AUTOCOMPLETE -->
+<!-- ================================================================= -->
+
 {% if can_edit %}
+
 <script>
     $(document).ready(function () {
-        const predictionInput = $(".species-prediction-autocomplete");
 
-        predictionInput.select2({
-            width: "100%",
-            placeholder: "Search for a species...",
-            allowClear: true,
-            tags: true,
-            minimumInputLength: 1,
+        $(".species-prediction-autocomplete").each(function () {
 
-            ajax: {
-                url: "{% url 'species_search' %}",
-                dataType: "json",
-                delay: 250,
+            const element = $(this);
 
-                data: function (params) {
-                    return {
-                        q: params.term || ""
-                    };
-                },
-
-                processResults: function (data) {
-                    return {
-                        results: data.results || []
-                    };
-                },
-
-                cache: true
-            },
-
-            createTag: function (params) {
-                const value = $.trim(params.term);
-
-                if (!value) {
-                    return null;
-                }
-
-                return {
-                    id: value,
-                    text: value,
-                    newTag: true
-                };
+            /*
+             * Do not initialize Select2 twice.
+             */
+            if (element.hasClass("select2-hidden-accessible")) {
+                return;
             }
+
+            element.select2({
+                width: "100%",
+
+                placeholder: "Search for a species...",
+
+                allowClear: true,
+
+                tags: true,
+
+                ajax: {
+                    url: "{% url 'species_search' %}",
+
+                    dataType: "json",
+
+                    delay: 250,
+
+                    data: function (params) {
+                        return {
+                            q: params.term || ""
+                        };
+                    },
+
+                    processResults: function (data) {
+                        return data;
+                    },
+
+                    cache: true
+                },
+
+                minimumInputLength: 0,
+
+                createTag: function (params) {
+
+                    const term = $.trim(params.term);
+
+                    if (!term) {
+                        return null;
+                    }
+
+                    return {
+                        id: term,
+                        text: term,
+                        newTag: true
+                    };
+                }
+            });
+
         });
+
     });
 </script>
+
 {% endif %}
+
 {% endblock %}

@@ -153,11 +153,26 @@ def normalize_speciesnet_item(item):
         "file_name": item.get("file_name") or "",
         "file_url": item.get("file_url") or "",
         "status": item.get("status") or "",
+
         "prediction": prediction_label,
         "prediction_score": prediction_score,
         "prediction_source": prediction_source,
-        "animals": animals,
+
+        "classifications": (
+            prediction_entry.get("classifications")
+            if isinstance(
+                prediction_entry.get("classifications"),
+                dict,
+            )
+            else {}
+        ),
+
         "detections": detections,
+
+        "model_version": (
+            prediction_entry.get("model_version")
+            or ""
+        ),
     }
 
 
@@ -262,8 +277,9 @@ def import_speciesnet_results(uploaded_file):
                         prediction=item["prediction"],
                         prediction_score=item["prediction_score"],
                         prediction_source=item["prediction_source"],
-                        animals=item["animals"],
+                        classifications=item["classifications"],
                         detections=item["detections"],
+                        model_version=item["model_version"],
                     )
                 )
 
@@ -294,62 +310,59 @@ def import_speciesnet_results(uploaded_file):
                 if species_result is None:
                     continue
 
-                for animal in item["animals"]:
-                    if not isinstance(animal, dict):
-                        continue
-
-                    bbox = animal.get("bbox") or []
-
-                    label = (
-                        animal.get("label")
-                        or animal.get("taxonomy")
-                        or animal.get("category")
-                        or ""
-                    )
-
-                    confidence = animal.get("score")
-
-                    if confidence is None:
-                        confidence = animal.get("conf")
-
-                    detection_rows.append(
-                        SpeciesDetection(
-                            species_result=species_result,
-                            source="animal",
-                            label=str(label).strip(),
-                            confidence=confidence,
-                            **bbox_values(bbox),
-                        )
-                    )
-
                 for detection in item["detections"]:
                     if not isinstance(detection, dict):
                         continue
 
                     bbox = detection.get("bbox") or []
 
-                    label = (
+                    detection_type = (
                         detection.get("label")
-                        or detection.get("taxonomy")
-                        or detection.get("category")
                         or ""
-                    )
+                    ).strip()
 
                     confidence = detection.get("conf")
 
                     if confidence is None:
                         confidence = detection.get("score")
 
+                    if (
+                        confidence is not None
+                        and confidence < 0.1
+                    ):
+                        continue
+
+                    if detection_type == "animal":
+                        detection_prediction = item["prediction"]
+                        detection_prediction_score = item["prediction_score"]
+                        detection_prediction_source = item["prediction_source"]
+
+                    elif detection_type == "human":
+                        detection_prediction = "human"
+                        detection_prediction_score = confidence
+                        detection_prediction_source = "detector"
+
+                    elif detection_type == "vehicle":
+                        detection_prediction = "vehicle"
+                        detection_prediction_score = confidence
+                        detection_prediction_source = "detector"
+
+                    else:
+                        detection_prediction = ""
+                        detection_prediction_score = None
+                        detection_prediction_source = ""
+
                     detection_rows.append(
                         SpeciesDetection(
                             species_result=species_result,
-                            source="detection",
-                            label=str(label).strip(),
-                            confidence=confidence,
+                            detection_type=detection_type,
+                            detection_confidence=confidence,
+                            prediction=detection_prediction.split(";")[-1].strip(),
+                            prediction_score=detection_prediction_score,
+                            prediction_source=detection_prediction_source,
                             **bbox_values(bbox),
                         )
                     )
-
             if detection_rows:
                 SpeciesDetection.objects.bulk_create(
                     detection_rows,

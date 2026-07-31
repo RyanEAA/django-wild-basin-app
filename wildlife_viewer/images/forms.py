@@ -317,16 +317,24 @@ class SpeciesNetEditForm(forms.ModelForm):
 
         self.fields["prediction"].widget.choices = choices
 
-
 class SpeciesDetectionEditForm(forms.ModelForm):
-    label = forms.ChoiceField(
-        choices=DETECTION_LABEL_CHOICES,
-        required=True,
+    prediction = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "species-prediction-autocomplete",
+                "autocomplete": "off",
+                "placeholder": "Search for a species...",
+            }
+        ),
     )
 
     class Meta:
         model = SpeciesDetection
-        fields = ["label"]
+        fields = [
+            "detection_type",
+            "prediction",
+        ]
 
 
 SpeciesDetectionFormSet = modelformset_factory(

@@ -56,7 +56,6 @@ class ImageRecord(models.Model):
     def __str__(self):
         return f"{self.file_name} ({self.file_id})"
 
-
 class SpeciesNetResult(models.Model):
     image = models.OneToOneField(
         ImageRecord,
@@ -64,28 +63,48 @@ class SpeciesNetResult(models.Model):
         related_name="species_result",
     )
 
-    status = models.CharField(max_length=50, blank=True, null=True)
-    prediction = models.TextField(blank=True, null=True)
-    prediction_score = models.FloatField(null=True, blank=True)
+    status = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+    )
+
+    # SpeciesNet's original IMAGE-LEVEL prediction.
+    prediction = models.TextField(
+        blank=True,
+        null=True,
+    )
+
+    prediction_score = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
     prediction_source = models.CharField(
         max_length=255,
         blank=True,
         null=True,
     )
 
-    animals = models.JSONField(default=list, blank=True)
-    detections = models.JSONField(default=list, blank=True)
+    # Preserve original SpeciesNet information.
+    classifications = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    detections = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    model_version = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
 
     @property
     def display_prediction(self):
-        """
-        Return the common name from a SpeciesNet taxonomy string.
-
-        Example:
-        uuid;mammalia;carnivora;canidae;canis;latrans;coyote
-        becomes:
-        coyote
-        """
         if not self.prediction:
             return ""
 
@@ -124,9 +143,10 @@ class OCRResult(models.Model):
         return f"OCRResult(image={self.image.file_id}, status={self.status})"
 
 class SpeciesDetection(models.Model):
-    SOURCE_CHOICES = [
-        ("animal", "Animal Classification"),
-        ("detection", "Detector Box"),
+    DETECTION_TYPE_CHOICES = [
+        ("animal", "Animal"),
+        ("human", "Human"),
+        ("vehicle", "Vehicle"),
     ]
 
     species_result = models.ForeignKey(
@@ -135,17 +155,62 @@ class SpeciesDetection(models.Model):
         related_name="species_detections",
     )
 
-    source = models.CharField(max_length=50, choices=SOURCE_CHOICES, db_index=True)
-    label = models.CharField(max_length=255, blank=True, db_index=True)
-    confidence = models.FloatField(null=True, blank=True, db_index=True)
+    # What the DETECTOR saw.
+    detection_type = models.CharField(
+        max_length=50,
+        choices=DETECTION_TYPE_CHOICES,
+        blank=True,
+        db_index=True,
+    )
+
+    detection_confidence = models.FloatField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
 
     bbox_x = models.FloatField(null=True, blank=True)
     bbox_y = models.FloatField(null=True, blank=True)
     bbox_width = models.FloatField(null=True, blank=True)
     bbox_height = models.FloatField(null=True, blank=True)
 
+    # What SPECIES we believe this particular detection is.
+    prediction = models.TextField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
+    prediction_score = models.FloatField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    prediction_source = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+
+    @property
+    def display_prediction(self):
+        if not self.prediction:
+            return ""
+
+        parts = [
+            part.strip()
+            for part in self.prediction.split(";")
+            if part.strip()
+        ]
+
+        return parts[-1] if parts else self.prediction
+
     def __str__(self):
-        return f"{self.label} ({self.source})"
+        return (
+            f"{self.display_prediction or self.detection_type} "
+            f"({self.detection_confidence})"
+        )
 
 class AppSettings(models.Model):
     box_client_id = models.TextField(blank=True)

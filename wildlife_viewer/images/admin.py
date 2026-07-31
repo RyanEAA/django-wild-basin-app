@@ -27,21 +27,28 @@ class SpeciesNetResultAdmin(admin.ModelAdmin):
 @admin.register(SpeciesDetection)
 class SpeciesDetectionAdmin(admin.ModelAdmin):
     list_display = (
-        "species_result",
-        "source",
-        "label",
-        "confidence",
-        "bbox_x",
-        "bbox_y",
-        "bbox_width",
-        "bbox_height",
+        "image_file_name",
+        "detection_type",
+        "display_prediction",
+        "detection_confidence",
+        "prediction_score",
+        "prediction_source",
     )
+
+    list_filter = (
+        "detection_type",
+        "prediction_source",
+    )
+
     search_fields = (
-        "species_result__image__file_name",
         "species_result__image__file_id",
-        "label",
+        "species_result__image__file_name",
+        "prediction",
     )
-    list_filter = ("source", "label")
+
+    @admin.display(description="Image")
+    def image_file_name(self, obj):
+        return obj.species_result.image.file_name
 
 
 @admin.register(OCRResult)

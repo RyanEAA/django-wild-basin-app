@@ -100,7 +100,7 @@ def export_csv(request):
     writer = csv.writer(response)
     writer.writerow([
         "image_name",
-        "box_directory",
+        "box_url",
         "prediction",
         "detection",
         "date",
@@ -125,9 +125,9 @@ def export_csv(request):
 
         if species_result:
             detections = [
-                detection.label.strip()
+                detection.display_prediction
                 for detection in species_result.species_detections.all()
-                if detection.label and detection.label.strip()
+                if detection.display_prediction
             ]
 
         if not detections:
@@ -136,7 +136,7 @@ def export_csv(request):
         for detection_label in detections:
             writer.writerow([
                 image.file_name,
-                image.path,
+                image.file_url,
                 prediction,
                 detection_label,
                 capture_date,
@@ -164,7 +164,10 @@ def _build_gallery_queryset(request):
         images = images.exclude(
             Q(species_result__prediction__icontains="human")
             | Q(
-                species_result__species_detections__label__icontains="human"
+                species_result__species_detections__detection_type="human"
+            )
+            | Q(
+                species_result__species_detections__prediction__icontains="human"
             )
         )
 
@@ -187,7 +190,10 @@ def _build_gallery_queryset(request):
                 | Q(ocr_result__ocr_texts__icontains=search)
                 | Q(species_result__prediction__icontains=search)
                 | Q(
-                    species_result__species_detections__label__icontains=search
+                    species_result__species_detections__prediction__icontains=search
+                )
+                | Q(
+                    species_result__species_detections__detection_type__icontains=search
                 )
             )
 
@@ -507,7 +513,8 @@ def image_detail(request, file_id):
 
         detection_contains_human = (
             species_result.species_detections.filter(
-                label__icontains="human"
+                Q(detection_type="human")
+                | Q(prediction__icontains="human")
             ).exists()
         )
 
@@ -532,7 +539,7 @@ def image_detail(request, file_id):
                 file_id=image.file_id,
             )
 
-        # Only create records when a researcher actually submits edits.
+        # Only create records when a researcher submits edits.
         if species_result is None:
             species_result = SpeciesNetResult.objects.create(
                 image=image
@@ -543,8 +550,10 @@ def image_detail(request, file_id):
                 image=image
             )
 
+        species_post_data = request.POST.copy()
+
         species_form = SpeciesNetEditForm(
-            request.POST,
+            species_post_data,
             instance=species_result,
         )
 

@@ -204,12 +204,19 @@ def _build_gallery_queryset(request):
                 if item.strip()
             ]
 
+            # filtering species
+
             if selected_species:
                 species_query = Q()
 
                 for selected_label in selected_species:
                     species_query |= Q(
                         species_result__prediction__icontains=selected_label
+                    )
+
+                    species_query |= Q(
+                        species_result__species_detections__prediction__icontains=
+                        selected_label
                     )
 
                 images = images.filter(species_query)
@@ -246,28 +253,50 @@ def _build_gallery_queryset(request):
 
 def species_search(request):
     query = request.GET.get("q", "").strip()
+    is_researcher = user_is_researcher(request.user)
 
-    results = SpeciesNetResult.objects.exclude(
+    # Original image-level SpeciesNet predictions.
+    image_predictions = SpeciesNetResult.objects.exclude(
+        prediction__isnull=True,
+    ).exclude(
+        prediction="",
+    )
+
+    # Editable per-detection predictions.
+    detection_predictions = SpeciesDetection.objects.exclude(
         prediction__isnull=True,
     ).exclude(
         prediction="",
     )
 
     # Public users should never receive human as a suggestion.
-    if not user_is_researcher(request.user):
-        results = results.exclude(
+    if not is_researcher:
+        image_predictions = image_predictions.exclude(
+            prediction__icontains="human",
+        )
+
+        detection_predictions = detection_predictions.exclude(
             prediction__icontains="human",
         )
 
     if query:
-        results = results.filter(
+        image_predictions = image_predictions.filter(
             prediction__icontains=query,
         )
 
-    # Fetch extra rows because different taxonomy strings may clean down
-    # to the same display label.
-    prediction_values = (
-        results
+        detection_predictions = detection_predictions.filter(
+            prediction__icontains=query,
+        )
+
+    image_prediction_values = list(
+        image_predictions
+        .values_list("prediction", flat=True)
+        .distinct()
+        .order_by("prediction")[:200]
+    )
+
+    detection_prediction_values = list(
+        detection_predictions
         .values_list("prediction", flat=True)
         .distinct()
         .order_by("prediction")[:200]
@@ -276,7 +305,10 @@ def species_search(request):
     labels = []
     seen_labels = set()
 
-    for prediction in prediction_values:
+    for prediction in (
+        image_prediction_values
+        + detection_prediction_values
+    ):
         label = clean_species_label(prediction)
 
         if not label:
@@ -290,9 +322,6 @@ def species_search(request):
         seen_labels.add(normalized_label)
         labels.append(label)
 
-        if len(labels) >= 20:
-            break
-
     labels.sort(key=str.casefold)
 
     return JsonResponse({
@@ -301,7 +330,7 @@ def species_search(request):
                 "id": label,
                 "text": label,
             }
-            for label in labels
+            for label in labels[:20]
         ]
     })
 

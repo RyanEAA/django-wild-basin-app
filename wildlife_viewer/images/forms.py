@@ -328,7 +328,6 @@ class SpeciesDetectionEditForm(forms.ModelForm):
             }
         ),
     )
-
     class Meta:
         model = SpeciesDetection
         fields = [

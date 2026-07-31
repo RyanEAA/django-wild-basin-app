@@ -390,58 +390,6 @@
 
             {% endif %}
 
-
-            <!-- ========================================================= -->
-            <!-- ORIGINAL IMAGE-LEVEL SPECIESNET RESULT -->
-            <!-- ========================================================= -->
-
-            {% if can_edit and species_result %}
-
-                <div class="speciesnet-image-result">
-
-                    <h3>Original SpeciesNet Image Result</h3>
-
-                    <div class="meta-row">
-                        <strong>Prediction</strong>
-                        <span>
-                            {{ species_result.display_prediction|default:"—" }}
-                        </span>
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Confidence</strong>
-
-                        <span>
-                            {% if species_result.prediction_score is not None %}
-                                {{ species_result.prediction_score|floatformat:3 }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </span>
-                    </div>
-
-                    <div class="meta-row">
-                        <strong>Source</strong>
-                        <span>
-                            {{ species_result.prediction_source|default:"—" }}
-                        </span>
-                    </div>
-
-                    {% if species_result.model_version %}
-
-                        <div class="meta-row">
-                            <strong>Model Version</strong>
-                            <span>
-                                {{ species_result.model_version }}
-                            </span>
-                        </div>
-
-                    {% endif %}
-
-                </div>
-
-            {% endif %}
-
         </section>
 
 

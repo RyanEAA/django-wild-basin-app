@@ -142,7 +142,8 @@ select {
     border-radius: 6px;
 }
 
-.btn-primary {
+a.btn-primary,
+button.btn-primary {
     background: var(--navy);
     color: white;
     padding: 11px 18px;

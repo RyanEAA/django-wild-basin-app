@@ -101,7 +101,7 @@ def export_csv(request):
     writer.writerow([
         "image_name",
         "box_url",
-        "path"
+        "path",
         "prediction",
         "detection",
         "date",

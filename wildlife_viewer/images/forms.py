@@ -256,14 +256,35 @@ class OCRUploadForm(forms.Form):
 
 class GalleryFilterForm(forms.Form):
     search = forms.CharField(required=False)
-    species = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    species = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
+    path = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
     has_ocr = forms.BooleanField(required=False)
     has_speciesnet = forms.BooleanField(required=False)
-    min_score = forms.FloatField(required=False, min_value=0.0, max_value=1.0)
-    start_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
-    end_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
 
+    min_score = forms.FloatField(
+        required=False,
+        min_value=0.0,
+        max_value=1.0,
+    )
 
+    start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+
+    end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
 
 class OCREditForm(forms.ModelForm):
     class Meta:

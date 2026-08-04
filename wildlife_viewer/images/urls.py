@@ -18,6 +18,7 @@ urlpatterns = [
     path("about/", views.about, name="about"),
     path("research/", views.research, name="research"),
     path("contact/", views.contact, name="contact"),
+    path("ajax/path-search/", views.path_search, name="path_search")
 
     
     ]

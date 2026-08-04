@@ -17,30 +17,67 @@
     <h2>Filter Images</h2>
 
     <div class="filter-grid">
-        <div>
-            <label>Search</label><br>
+        <div class="search-filter">
+            <label for="{{ form.search.id_for_label }}">Search</label><br>
             {{ form.search }}
         </div>
 
-        <div>
-            <label>Species</label><br>
-            <select id="species-select" multiple="multiple" style="width:100%;"></select>
+        <div class="path-filter">
+            <label for="path-select">Camera Paths</label><br>
+
+            <select
+                id="path-select"
+                multiple="multiple"
+                style="width: 100%;"
+            ></select>
+
+            {{ form.path }}
+
+            {% for error in form.path.errors %}
+                <div class="form-error">
+                    {{ error }}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="species-filter">
+            <label for="species-select">Species</label><br>
+
+            <select
+                id="species-select"
+                multiple="multiple"
+                style="width: 100%;"
+            ></select>
+
             {{ form.species }}
         </div>
 
-        <div>
+        <div class="checkbox-filter">
             <label>{{ form.has_ocr }} Has OCR</label><br>
             <label>{{ form.has_speciesnet }} Has SpeciesNet</label>
         </div>
 
-        <div>
-            <label>Minimum Score</label><br>
+        <div class="score-filter">
+            <label for="{{ form.min_score.id_for_label }}">
+                Minimum Score
+            </label><br>
             {{ form.min_score }}
         </div>
 
-        <div>
-            <label>Date Range</label><br>
-            {{ form.start_date }} to {{ form.end_date }}
+        <div class="date-filter">
+            <label>Date Range</label>
+
+            <div class="date-range-fields">
+                <div class="left-date-field">
+                    {{ form.start_date }}
+                </div>
+
+                <span class="date-range-separator">to</span>
+
+                <div class="right-date-field">
+                    {{ form.end_date }}
+                </div>
+            </div>
         </div>
     </div>
 
@@ -155,26 +192,113 @@ $(document).ready(function () {
 </script>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    document.querySelectorAll(".image-placeholder").forEach(function (placeholder) {
-        const fileId = placeholder.dataset.fileId;
+    $(document).ready(function () {
+        /*
+        * Species autocomplete
+        */
+        const speciesInput = $("#id_species");
+        const speciesSelect = $("#species-select");
 
-        fetch(`/ajax/cache-image/${fileId}/`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.ok && data.image_url) {
-                    const img = document.createElement("img");
-                    img.src = data.image_url;
-                    placeholder.replaceWith(img);
-                } else {
-                    placeholder.textContent = "Image unavailable";
+        speciesSelect.select2({
+            placeholder: "Search species...",
+            width: "100%",
+            ajax: {
+                url: "{% url 'species_search' %}",
+                dataType: "json",
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term || ""
+                    };
+                },
+                processResults: function (data) {
+                    return data;
                 }
-            })
-            .catch(() => {
-                placeholder.textContent = "Image unavailable";
-            });
+            },
+            tags: true
+        });
+
+        speciesSelect.on("change", function () {
+            speciesInput.val(
+                (speciesSelect.val() || []).join(",")
+            );
+        });
+
+        const existingSpecies = speciesInput.val();
+
+        if (existingSpecies) {
+            existingSpecies
+                .split(",")
+                .filter(Boolean)
+                .forEach(function (species) {
+                    speciesSelect.append(
+                        new Option(
+                            species,
+                            species,
+                            true,
+                            true
+                        )
+                    );
+                });
+
+            speciesSelect.trigger("change");
+        }
+
+
+        /*
+        * Path autocomplete
+        */
+        const pathInput = $("#id_path");
+        const pathSelect = $("#path-select");
+
+        pathSelect.select2({
+            placeholder: "Select camera paths...",
+            width: "100%",
+            closeOnSelect: false,
+            ajax: {
+                url: "{% url 'path_search' %}",
+                dataType: "json",
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term || ""
+                    };
+                },
+                processResults: function (data) {
+                    return data;
+                }
+            }
+        });
+
+        pathSelect.on("change", function () {
+            pathInput.val(
+                (pathSelect.val() || []).join(",")
+            );
+        });
+
+        const existingPaths = pathInput.val();
+
+        if (existingPaths) {
+            existingPaths
+                .split(",")
+                .map(function (path) {
+                    return path.trim();
+                })
+                .filter(Boolean)
+                .forEach(function (path) {
+                    pathSelect.append(
+                        new Option(
+                            path,
+                            path,
+                            true,
+                            true
+                        )
+                    );
+                });
+
+            pathSelect.trigger("change");
+        }
     });
-});
 </script>
 
 {% endblock %}

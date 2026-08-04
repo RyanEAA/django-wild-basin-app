@@ -130,9 +130,25 @@ body {
 
 .filter-grid {
     display: grid;
-    grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1.5fr;
-    gap: 20px;
+    grid-template-columns:
+        minmax(180px, 0.8fr) minmax(300px, 1.4fr) minmax(240px, 1fr) minmax(190px, 0.8fr) minmax(180px, 0.8fr);
+    column-gap: 24px;
+    row-gap: 24px;
     align-items: end;
+}
+
+.filter-grid>div {
+    min-width: 0;
+}
+
+.search-filter input,
+.score-filter input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.date-filter {
+    grid-column: 1 / span 2;
 }
 
 input,
@@ -514,4 +530,71 @@ button.btn-primary {
 .editable-detections-table th:first-child,
 .editable-detections-table td:first-child input {
     min-width: 160px;
+}
+
+.date-range-fields {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+    margin-top: 0.35rem;
+}
+
+.left-date-field,
+.right-date-field {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.left-date-field input,
+.right-date-field input {
+    width: 170px;
+    min-width: 0;
+}
+
+.date-range-separator {
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+@media (max-width: 600px) {
+    .date-range-fields {
+        flex-wrap: wrap;
+    }
+
+    .left-date-field input,
+    .right-date-field input {
+        width: 100%;
+    }
+}
+
+.filter-grid .select2-container {
+    width: 100% !important;
+}
+
+.filter-grid .select2-container--default .select2-selection--multiple {
+    min-height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+@media (max-width: 1100px) {
+    .filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .date-filter {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 700px) {
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .date-filter {
+        grid-column: auto;
+    }
 }

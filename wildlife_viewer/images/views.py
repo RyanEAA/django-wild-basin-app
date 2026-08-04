@@ -183,6 +183,7 @@ def _build_gallery_queryset(request):
         min_score = form.cleaned_data.get("min_score")
         start_date = form.cleaned_data.get("start_date")
         end_date = form.cleaned_data.get("end_date")
+        path = form.cleaned_data.get("path")
 
         if search:
             images = images.filter(
@@ -197,6 +198,11 @@ def _build_gallery_queryset(request):
                 | Q(
                     species_result__species_detections__detection_type__icontains=search
                 )
+                | Q(path__icontains=search)
+            )
+        if path:
+            images = images.filter(
+                path__icontains=path
             )
 
         if species:
@@ -252,6 +258,36 @@ def _build_gallery_queryset(request):
 
     return form, images.distinct(), is_researcher
 
+def path_search(request):
+    query = request.GET.get("q", "").strip()
+
+    matching_paths = ImageRecord.objects.exclude(
+        path__isnull=True
+    ).exclude(
+        path=""
+    )
+
+    if query:
+        matching_paths = matching_paths.filter(
+            path__icontains=query
+        )
+
+    matching_paths = (
+        matching_paths
+        .values_list("path", flat=True)
+        .distinct()
+        .order_by("path")[:20]
+    )
+
+    return JsonResponse({
+        "results": [
+            {
+                "id": image_path,
+                "text": image_path,
+            }
+            for image_path in matching_paths
+        ]
+    })
 
 def species_search(request):
     query = request.GET.get("q", "").strip()

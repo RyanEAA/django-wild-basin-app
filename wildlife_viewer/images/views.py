@@ -23,7 +23,8 @@ from .forms import (
     GalleryFilterForm,
     SpeciesNetEditForm,
     OCREditForm,
-    SpeciesDetectionFormSet
+    SpeciesDetectionFormSet,
+    AppSettingsForm
 )
 
 from .models import (
@@ -32,6 +33,7 @@ from .models import (
     OCRResult, 
     ImportJob, 
     SpeciesDetection,
+    AppSettings,
     )
 
 from .services.box_cache import (
@@ -509,6 +511,28 @@ def researcher_dashboard(request):
     })
 
 @researcher_required
+def app_settings(request):
+    settings_obj = AppSettings.objects.order_by("pk").first()
+    if settings_obj is None:
+        settings_obj = AppSettings.objects.create()
+
+    if request.method == "POST":
+        form = AppSettingsForm(request.POST, instance=settings_obj)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Application settings updated.")
+            return redirect("app_settings")
+    else:
+        form = AppSettingsForm(instance=settings_obj)
+
+    return render(request, "images/app_settings.html", {
+        "form": form,
+        "app_settings": settings_obj,
+    })
+
+
+@researcher_required
 def upload_metadata(request):
     box_form = BoxImageMetadataUploadForm()
     speciesnet_form = SpeciesNetUploadForm()
@@ -727,6 +751,26 @@ def image_detail(request, file_id):
     else:
         detection_queryset = SpeciesDetection.objects.none()
 
+    bbox_overlays = []
+    for detection in detection_queryset:
+        if None in (
+            detection.bbox_x,
+            detection.bbox_y,
+            detection.bbox_width,
+            detection.bbox_height,
+        ):
+            continue
+
+        bbox_overlays.append({
+            "id": detection.id,
+            "left": max(0.0, min(100.0, detection.bbox_x * 100)),
+            "top": max(0.0, min(100.0, detection.bbox_y * 100)),
+            "width": max(0.0, min(100.0, detection.bbox_width * 100)),
+            "height": max(0.0, min(100.0, detection.bbox_height * 100)),
+            "prediction": detection.display_prediction or detection.get_detection_type_display() or "Detection",
+            "confidence": detection.prediction_score if detection.prediction_score is not None else detection.detection_confidence,
+        })
+
     if request.method == "POST":
         if not can_edit:
             return redirect(
@@ -818,6 +862,7 @@ def image_detail(request, file_id):
             "species_result": species_result,
             "ocr_result": ocr_result,
             "detections": detection_queryset,
+            "bbox_overlays": bbox_overlays,
             "can_edit": can_edit,
             "species_form": species_form,
             "ocr_form": ocr_form,

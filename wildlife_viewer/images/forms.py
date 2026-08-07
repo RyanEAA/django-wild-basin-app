@@ -3,7 +3,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django import forms
 from .models import (
-    ImageRecord, SpeciesNetResult, OCRResult, SpeciesDetection
+    ImageRecord, SpeciesNetResult, OCRResult, SpeciesDetection, AppSettings
 )
 from django.forms import modelformset_factory
 
@@ -363,3 +363,28 @@ SpeciesDetectionFormSet = modelformset_factory(
     extra=0,
     can_delete=True,
 )
+
+class AppSettingsForm(forms.ModelForm):
+    class Meta:
+        model = AppSettings
+        fields = [
+            "box_client_id",
+            "box_client_secret",
+            "box_access_token",
+            "box_refresh_token",
+        ]
+        widgets = {
+            "box_client_id": forms.TextInput(attrs={"autocomplete": "off"}),
+            "box_client_secret": forms.PasswordInput(
+                attrs={"autocomplete": "new-password"},
+                render_value=True,
+            ),
+            "box_access_token": forms.Textarea(attrs={"rows": 4, "spellcheck": "false"}),
+            "box_refresh_token": forms.Textarea(attrs={"rows": 4, "spellcheck": "false"}),
+        }
+        labels = {
+            "box_client_id": "Box Client ID",
+            "box_client_secret": "Box Client Secret",
+            "box_access_token": "Box Access Token",
+            "box_refresh_token": "Box Refresh Token",
+        }

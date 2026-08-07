@@ -47,11 +47,44 @@
         <section class="image-panel">
 
             {% if image_url %}
-                <img
-                    src="{{ image_url }}"
-                    class="detail-image"
-                    alt="{{ image.file_name }}"
-                >
+                <div class="detail-image-toolbar">
+                    {% if bbox_overlays %}
+                        <button
+                            id="toggle-bounding-boxes"
+                            class="btn-link bbox-toggle-button"
+                            type="button"
+                            aria-pressed="false"
+                        >
+                            Show Bounding Boxes
+                        </button>
+                    {% endif %}
+                </div>
+
+                <div class="detail-image-stage">
+                    <img
+                        src="{{ image_url }}"
+                        class="detail-image"
+                        alt="{{ image.file_name }}"
+                    >
+
+                    {% if bbox_overlays %}
+                        <div id="bounding-box-overlay" class="bounding-box-overlay" hidden>
+                            {% for box in bbox_overlays %}
+                                <div
+                                    class="detection-bounding-box"
+                                    style="left: {{ box.left }}%; top: {{ box.top }}%; width: {{ box.width }}%; height: {{ box.height }}%;"
+                                >
+                                    <span class="detection-bounding-box-label">
+                                        {{ box.prediction }}
+                                        {% if box.confidence is not None %}
+                                            · {{ box.confidence|floatformat:3 }}
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
             {% else %}
                 <div class="image-placeholder large">
                     No cached image available.
@@ -568,6 +601,26 @@
 
 </div>
 
+
+{% if bbox_overlays %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const button = document.getElementById("toggle-bounding-boxes");
+        const overlay = document.getElementById("bounding-box-overlay");
+
+        if (!button || !overlay) {
+            return;
+        }
+
+        button.addEventListener("click", function () {
+            const willShow = overlay.hidden;
+            overlay.hidden = !willShow;
+            button.setAttribute("aria-pressed", willShow ? "true" : "false");
+            button.textContent = willShow ? "Hide Bounding Boxes" : "Show Bounding Boxes";
+        });
+    });
+</script>
+{% endif %}
 
 <!-- ================================================================= -->
 <!-- DETECTION PREDICTION AUTOCOMPLETE -->

@@ -1,11 +1,13 @@
 import csv
+import tempfile
+import zipfile
 
 from django.shortcuts import render
 import time
 # Create your views here.
 import json
 
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
@@ -89,6 +91,132 @@ def _format_capture_datetime(ocr_result):
         capture_time = ocr_result.capture_time.strftime("%H:%M:%S")
 
     return capture_date, capture_time
+
+
+def _write_json_line(file_handle, payload):
+    file_handle.write(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    )
+    file_handle.write(b"\n")
+
+
+def export_json_bundle(request):
+    """Export gallery records in formats accepted by the existing importers."""
+    _, images, _ = _build_gallery_queryset(request)
+
+    # TemporaryFile automatically spills to disk and is removed when the
+    # FileResponse finishes closing it. This avoids holding a large export in RAM.
+    export_file = tempfile.TemporaryFile()
+
+    with zipfile.ZipFile(
+        export_file,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+        allowZip64=True,
+    ) as archive:
+        # Python's zipfile module permits only one writable member handle at a
+        # time. Fully close each entry before opening the next one.
+        with archive.open("image_urls.json", mode="w") as image_file:
+            image_file.write(b"[\n")
+            first_image = True
+
+            for image in images.iterator(chunk_size=1000):
+                image_payload = {
+                    "file_id": image.file_id,
+                    "file_name": image.file_name,
+                    "path": image.path,
+                    "file_url": image.file_url,
+                    "direct_download_url": image.direct_download_url,
+                    "preview_url": image.preview_url,
+                }
+
+                if not first_image:
+                    image_file.write(b",\n")
+
+                image_file.write(
+                    json.dumps(
+                        image_payload,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                )
+                first_image = False
+
+            image_file.write(b"\n]\n")
+
+        with archive.open("speciesnet_predictions.jsonl", mode="w") as species_file:
+            for image in images.iterator(chunk_size=1000):
+                species_result = getattr(image, "species_result", None)
+
+                if species_result is not None:
+                    # Normal SpeciesNet records keep the original raw detection
+                    # payload. Once a researcher edits a per-detection prediction,
+                    # status is changed to ``updated`` and the editable
+                    # SpeciesDetection rows become the authoritative export data.
+                    if species_result.status == "updated":
+                        exported_detections = []
+
+                        for detection in species_result.species_detections.all().order_by("id"):
+                            exported_detection = {
+                                "label": detection.detection_type or "",
+                                "conf": detection.detection_confidence,
+                                "bbox": [
+                                    detection.bbox_x,
+                                    detection.bbox_y,
+                                    detection.bbox_width,
+                                    detection.bbox_height,
+                                ],
+                                # These fields are Wild Basin round-trip metadata.
+                                # The updated importer recognizes them while the
+                                # original SpeciesNet fields remain intact.
+                                "prediction": detection.prediction or "",
+                                "prediction_score": detection.prediction_score,
+                                "prediction_source": detection.prediction_source or "",
+                            }
+                            exported_detections.append(exported_detection)
+                    else:
+                        exported_detections = species_result.detections or []
+
+                    _write_json_line(species_file, {
+                        "status": species_result.status or "",
+                        "file_id": image.file_id,
+                        "file_name": image.file_name,
+                        "file_url": image.file_url,
+                        "prediction": {
+                            "prediction": species_result.prediction or "",
+                            "prediction_score": species_result.prediction_score,
+                            "prediction_source": species_result.prediction_source or "",
+                            "classifications": species_result.classifications or {},
+                            "detections": exported_detections,
+                            "model_version": species_result.model_version or "",
+                        },
+                    })
+
+        with archive.open("ocr_results.jsonl", mode="w") as ocr_file:
+            for image in images.iterator(chunk_size=1000):
+                ocr_result = getattr(image, "ocr_result", None)
+
+                if ocr_result is not None:
+                    _write_json_line(ocr_file, {
+                        "status": ocr_result.status or "",
+                        "file_id": image.file_id,
+                        "file_name": image.file_name,
+                        "file_url": image.file_url,
+                        "path": image.path,
+                        # Parsed date/time/temperature fields are intentionally
+                        # omitted because the OCR importer regenerates them from
+                        # the original OCR strings.
+                        "ocr_texts": ocr_result.ocr_texts or [],
+                    })
+
+    export_file.seek(0)
+
+    return FileResponse(
+        export_file,
+        as_attachment=True,
+        filename="wild_basin_json_export.zip",
+        content_type="application/zip",
+    )
 
 
 def export_csv(request):
@@ -635,14 +763,23 @@ def image_detail(request, file_id):
             prefix="detections",
         )
 
+        # SpeciesNetEditForm is not rendered on this page, so saving the
+        # bound form here would replace the existing image-level prediction,
+        # score, and source with blank POST values. Preserve the original
+        # SpeciesNet result and only save the fields that the researcher can
+        # actually edit on this page.
         if (
-            species_form.is_valid()
-            and ocr_form.is_valid()
+            ocr_form.is_valid()
             and detection_formset.is_valid()
         ):
-            species_form.save()
+            species_detections_changed = detection_formset.has_changed()
+
             ocr_form.save()
             detection_formset.save()
+
+            if species_detections_changed:
+                species_result.status = "updated"
+                species_result.save(update_fields=["status"])
 
             messages.success(
                 request,

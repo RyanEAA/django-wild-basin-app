@@ -7,6 +7,7 @@ urlpatterns = [
     path("", views.gallery, name="gallery"),
     path("image/<str:file_id>/", views.image_detail, name="image_detail"),  
     path("export/csv/", views.export_csv, name="export_csv"),
+    path("export/json/", views.export_json_bundle, name="export_json_bundle"),
     
     path("ajax/species-search/", views.species_search, name="species_search"),
 

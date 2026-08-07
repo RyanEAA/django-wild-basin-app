@@ -332,7 +332,17 @@ def import_speciesnet_results(uploaded_file):
                     ):
                         continue
 
-                    if detection_type == "animal":
+                    # Researcher-corrected exports store the authoritative
+                    # per-detection prediction directly on each detection.
+                    # Preserve those values when status="updated". Older and
+                    # untouched SpeciesNet JSONL files continue using the
+                    # original image-level fallback behavior.
+                    if item["status"] == "updated":
+                        detection_prediction = detection.get("prediction") or ""
+                        detection_prediction_score = detection.get("prediction_score")
+                        detection_prediction_source = detection.get("prediction_source") or ""
+
+                    elif detection_type == "animal":
                         detection_prediction = item["prediction"]
                         detection_prediction_score = item["prediction_score"]
                         detection_prediction_source = item["prediction_source"]

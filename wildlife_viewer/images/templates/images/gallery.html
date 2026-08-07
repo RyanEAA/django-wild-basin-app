@@ -85,6 +85,7 @@
         <button class="btn-primary" type="submit">Apply Filters</button>
         <a class="btn-link" href="{% url 'gallery' %}">Clear Filters</a>
         <a class="btn-primary" href="{% url 'export_csv' %}{% if query_string %}?{{ query_string }}{% endif %}">Export CSV</a>
+        <a class="btn-primary" href="{% url 'export_json_bundle' %}{% if query_string %}?{{ query_string }}{% endif %}">Export JSON/JSONL</a>
     </br>
 </form>
 
@@ -193,6 +194,62 @@ $(document).ready(function () {
 
 <script>
     $(document).ready(function () {
+        /*
+         * Automatically fetch/cache gallery images that are not already
+         * cached. Keep concurrency modest so one gallery page does not send
+         * twenty simultaneous Box downloads.
+         */
+        const placeholders = Array.from(
+            document.querySelectorAll(".image-placeholder[data-file-id]")
+        );
+        const maxConcurrentLoads = 4;
+        let nextPlaceholderIndex = 0;
+
+        function loadNextImage() {
+            if (nextPlaceholderIndex >= placeholders.length) {
+                return;
+            }
+
+            const placeholder = placeholders[nextPlaceholderIndex++];
+            const fileId = placeholder.dataset.fileId;
+            const urlTemplate = "{% url 'cache_image_ajax' '__FILE_ID__' %}";
+            const cacheUrl = urlTemplate.replace(
+                "__FILE_ID__",
+                encodeURIComponent(fileId)
+            );
+
+            fetch(cacheUrl, {
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Image request failed");
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (!data.ok || !data.image_url) {
+                        placeholder.textContent = "Image unavailable";
+                        return;
+                    }
+
+                    const image = document.createElement("img");
+                    image.src = data.image_url;
+                    image.alt = "Trail camera image";
+                    placeholder.replaceWith(image);
+                })
+                .catch(function () {
+                    placeholder.textContent = "Image unavailable";
+                })
+                .finally(loadNextImage);
+        }
+
+        for (let worker = 0; worker < Math.min(maxConcurrentLoads, placeholders.length); worker++) {
+            loadNextImage();
+        }
+
         /*
         * Species autocomplete
         */

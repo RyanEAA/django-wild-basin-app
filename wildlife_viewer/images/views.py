@@ -283,15 +283,9 @@ def _build_gallery_queryset(request):
 
     images = (
         ImageRecord.objects
-        .select_related(
-            "species_result",
-            "ocr_result",
-        )
         .order_by("-created_at")
     )
 
-    # Public users must not see images where either the image-level
-    # prediction or an individual detection identifies a human.
     if not is_researcher:
         images = images.filter(
             contains_human=False
@@ -322,8 +316,8 @@ def _build_gallery_queryset(request):
                 | Q(
                     species_result__species_detections__detection_type__icontains=search
                 )
-                | Q(path__icontains=search)
             )
+
         if path:
             images = images.filter(
                 path__icontains=path
@@ -335,8 +329,6 @@ def _build_gallery_queryset(request):
                 for item in species.split(",")
                 if item.strip()
             ]
-
-            # filtering species
 
             if selected_species:
                 species_query = Q()
@@ -351,7 +343,9 @@ def _build_gallery_queryset(request):
                         selected_label
                     )
 
-                images = images.filter(species_query)
+                images = images.filter(
+                    species_query
+                )
 
         if has_ocr:
             images = images.filter(
@@ -363,8 +357,6 @@ def _build_gallery_queryset(request):
                 species_result__isnull=False
             )
 
-        # This now filters by the image-level SpeciesNet classification
-        # confidence rather than the generic detector-box confidence.
         if min_score is not None:
             images = images.filter(
                 species_result__prediction_score__gte=min_score
@@ -380,7 +372,11 @@ def _build_gallery_queryset(request):
                 ocr_result__capture_date__lte=end_date
             )
 
-    return form, images.distinct(), is_researcher
+    return (
+        form,
+        images.distinct(),
+        is_researcher,
+    )
 
 def path_search(request):
     query = request.GET.get("q", "").strip()

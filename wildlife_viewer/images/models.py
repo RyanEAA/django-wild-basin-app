@@ -46,6 +46,11 @@ class ImageRecord(models.Model):
         null=True,
     )
 
+    contains_human = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
     cache_last_accessed = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

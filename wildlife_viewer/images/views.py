@@ -293,14 +293,8 @@ def _build_gallery_queryset(request):
     # Public users must not see images where either the image-level
     # prediction or an individual detection identifies a human.
     if not is_researcher:
-        images = images.exclude(
-            Q(species_result__prediction__icontains="human")
-            | Q(
-                species_result__species_detections__detection_type="human"
-            )
-            | Q(
-                species_result__species_detections__prediction__icontains="human"
-            )
+        images = images.filter(
+            contains_human=False
         )
 
     form = GalleryFilterForm(request.GET)

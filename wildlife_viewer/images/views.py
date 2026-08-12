@@ -281,10 +281,7 @@ def export_csv(request):
 def _build_gallery_queryset(request):
     is_researcher = user_is_researcher(request.user)
 
-    images = (
-        ImageRecord.objects
-        .order_by("-created_at")
-    )
+    images = ImageRecord.objects.order_by("-created_at")
 
     if not is_researcher:
         images = images.filter(
@@ -292,6 +289,7 @@ def _build_gallery_queryset(request):
         )
 
     form = GalleryFilterForm(request.GET)
+    needs_distinct = False
 
     if form.is_valid():
         search = form.cleaned_data.get("search")
@@ -317,6 +315,8 @@ def _build_gallery_queryset(request):
                     species_result__species_detections__detection_type__icontains=search
                 )
             )
+
+            needs_distinct = True
 
         if path:
             images = images.filter(
@@ -347,6 +347,8 @@ def _build_gallery_queryset(request):
                     species_query
                 )
 
+                needs_distinct = True
+
         if has_ocr:
             images = images.filter(
                 ocr_result__isnull=False
@@ -372,11 +374,10 @@ def _build_gallery_queryset(request):
                 ocr_result__capture_date__lte=end_date
             )
 
-    return (
-        form,
-        images.distinct(),
-        is_researcher,
-    )
+    if needs_distinct:
+        images = images.distinct()
+
+    return form, images, is_researcher
 
 def path_search(request):
     query = request.GET.get("q", "").strip()

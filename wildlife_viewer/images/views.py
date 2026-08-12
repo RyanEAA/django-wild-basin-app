@@ -719,20 +719,9 @@ def image_detail(request, file_id):
     ).first()
 
     # Public users must not see images containing humans.
-    if not can_edit and species_result:
-        prediction_contains_human = (
-            "human" in (species_result.prediction or "").lower()
-        )
-
-        detection_contains_human = (
-            species_result.species_detections.filter(
-                Q(detection_type="human")
-                | Q(prediction__icontains="human")
-            ).exists()
-        )
-
-        if prediction_contains_human or detection_contains_human:
-            raise Http404("Image not found")
+    # Public users must not see images containing humans.
+    if not can_edit and image.contains_human:
+        raise Http404("Image not found")
 
     image_url = ensure_cached_image(image)
 
@@ -817,7 +806,36 @@ def image_detail(request, file_id):
 
             if species_detections_changed:
                 species_result.status = "updated"
-                species_result.save(update_fields=["status"])
+                species_result.save(
+                    update_fields=["status"]
+                )
+
+                prediction_contains_human = (
+                    "human"
+                    in (
+                        species_result.prediction
+                        or ""
+                    ).lower()
+                )
+
+                detection_contains_human = (
+                    species_result.species_detections
+                    .filter(
+                        detection_type="human"
+                    )
+                    .exists()
+                )
+
+                image.contains_human = (
+                    prediction_contains_human
+                    or detection_contains_human
+                )
+
+                image.save(
+                    update_fields=[
+                        "contains_human"
+                    ]
+                )
 
             messages.success(
                 request,

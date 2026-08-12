@@ -194,9 +194,20 @@ def import_speciesnet_results(uploaded_file):
 
         for item in items:
             try:
-                normalized_items.append(normalize_speciesnet_item(item))
-            except (KeyError, TypeError, ValueError) as error:
-                print("SpeciesNet normalization failed:", error)
+                normalized_items.append(
+                    normalize_speciesnet_item(item)
+                )
+
+            except (
+                KeyError,
+                TypeError,
+                ValueError,
+            ) as error:
+                print(
+                    "SpeciesNet normalization failed:",
+                    error,
+                )
+
                 failed += 1
 
         if not normalized_items:
@@ -236,8 +247,7 @@ def import_speciesnet_results(uploaded_file):
                     ignore_conflicts=True,
                 )
 
-            # Reload because bulk_create(ignore_conflicts=True) does not
-            # reliably populate all created objects in image_lookup.
+            # Reload ImageRecord objects after bulk_create.
             image_lookup = {
                 image.file_id: image
                 for image in ImageRecord.objects.filter(
@@ -254,13 +264,16 @@ def import_speciesnet_results(uploaded_file):
                 )
             )
 
-            # Deleting SpeciesNetResult should delete SpeciesDetection rows
-            # automatically when the FK uses on_delete=models.CASCADE.
+            # Existing SpeciesDetection rows are removed
+            # automatically through CASCADE.
             SpeciesNetResult.objects.filter(
                 image__file_id__in=file_ids
             ).delete()
 
             species_results = []
+
+            # Track contains_human for every image in this batch.
+            human_flags = {}
 
             for item in normalized_items:
                 file_id = item["file_id"]
@@ -283,6 +296,36 @@ def import_speciesnet_results(uploaded_file):
                     )
                 )
 
+                # Image-level prediction check.
+                image_prediction = (
+                    item["prediction"] or ""
+                ).lower()
+
+                contains_human = (
+                    "human" in image_prediction
+                )
+
+                # Detector-level check.
+                for detection in item["detections"]:
+                    if not isinstance(
+                        detection,
+                        dict,
+                    ):
+                        continue
+
+                    detection_type = (
+                        detection.get("label")
+                        or ""
+                    ).strip().lower()
+
+                    if detection_type == "human":
+                        contains_human = True
+                        break
+
+                human_flags[file_id] = (
+                    contains_human
+                )
+
                 if file_id in existing_file_ids:
                     updated += 1
                 else:
@@ -298,33 +341,48 @@ def import_speciesnet_results(uploaded_file):
                 result.image.file_id: result
                 for result in SpeciesNetResult.objects.filter(
                     image__file_id__in=file_ids
-                ).select_related("image")
+                ).select_related(
+                    "image"
+                )
             }
 
             detection_rows = []
 
             for item in normalized_items:
                 file_id = item["file_id"]
-                species_result = result_lookup.get(file_id)
+
+                species_result = (
+                    result_lookup.get(file_id)
+                )
 
                 if species_result is None:
                     continue
 
                 for detection in item["detections"]:
-                    if not isinstance(detection, dict):
+                    if not isinstance(
+                        detection,
+                        dict,
+                    ):
                         continue
 
-                    bbox = detection.get("bbox") or []
+                    bbox = (
+                        detection.get("bbox")
+                        or []
+                    )
 
                     detection_type = (
                         detection.get("label")
                         or ""
                     ).strip()
 
-                    confidence = detection.get("conf")
+                    confidence = detection.get(
+                        "conf"
+                    )
 
                     if confidence is None:
-                        confidence = detection.get("score")
+                        confidence = detection.get(
+                            "score"
+                        )
 
                     if (
                         confidence is not None
@@ -332,30 +390,65 @@ def import_speciesnet_results(uploaded_file):
                     ):
                         continue
 
-                    # Researcher-corrected exports store the authoritative
-                    # per-detection prediction directly on each detection.
-                    # Preserve those values when status="updated". Older and
-                    # untouched SpeciesNet JSONL files continue using the
-                    # original image-level fallback behavior.
+                    # Researcher-corrected exports store
+                    # authoritative per-detection predictions.
                     if item["status"] == "updated":
-                        detection_prediction = detection.get("prediction") or ""
-                        detection_prediction_score = detection.get("prediction_score")
-                        detection_prediction_source = detection.get("prediction_source") or ""
+                        detection_prediction = (
+                            detection.get(
+                                "prediction"
+                            )
+                            or ""
+                        )
+
+                        detection_prediction_score = (
+                            detection.get(
+                                "prediction_score"
+                            )
+                        )
+
+                        detection_prediction_source = (
+                            detection.get(
+                                "prediction_source"
+                            )
+                            or ""
+                        )
 
                     elif detection_type == "animal":
-                        detection_prediction = item["prediction"]
-                        detection_prediction_score = item["prediction_score"]
-                        detection_prediction_source = item["prediction_source"]
+                        detection_prediction = (
+                            item["prediction"]
+                        )
+
+                        detection_prediction_score = (
+                            item["prediction_score"]
+                        )
+
+                        detection_prediction_source = (
+                            item[
+                                "prediction_source"
+                            ]
+                        )
 
                     elif detection_type == "human":
                         detection_prediction = "human"
-                        detection_prediction_score = confidence
-                        detection_prediction_source = "detector"
+
+                        detection_prediction_score = (
+                            confidence
+                        )
+
+                        detection_prediction_source = (
+                            "detector"
+                        )
 
                     elif detection_type == "vehicle":
                         detection_prediction = "vehicle"
-                        detection_prediction_score = confidence
-                        detection_prediction_source = "detector"
+
+                        detection_prediction_score = (
+                            confidence
+                        )
+
+                        detection_prediction_source = (
+                            "detector"
+                        )
 
                     else:
                         detection_prediction = ""
@@ -367,22 +460,73 @@ def import_speciesnet_results(uploaded_file):
                             species_result=species_result,
                             detection_type=detection_type,
                             detection_confidence=confidence,
-                            prediction=detection_prediction.split(";")[-1].strip(),
-                            prediction_score=detection_prediction_score,
-                            prediction_source=detection_prediction_source,
+                            prediction=(
+                                detection_prediction
+                                .split(";")[-1]
+                                .strip()
+                            ),
+                            prediction_score=(
+                                detection_prediction_score
+                            ),
+                            prediction_source=(
+                                detection_prediction_source
+                            ),
                             **bbox_values(bbox),
                         )
                     )
+
             if detection_rows:
                 SpeciesDetection.objects.bulk_create(
                     detection_rows,
                     batch_size=batch_size,
                 )
 
+            # ----------------------------------------
+            # Update ImageRecord.contains_human
+            # ----------------------------------------
+
+            human_image_ids = []
+            non_human_image_ids = []
+
+            for file_id, contains_human in (
+                human_flags.items()
+            ):
+                image = image_lookup.get(file_id)
+
+                if image is None:
+                    continue
+
+                if contains_human:
+                    human_image_ids.append(
+                        image.pk
+                    )
+                else:
+                    non_human_image_ids.append(
+                        image.pk
+                    )
+
+            if human_image_ids:
+                ImageRecord.objects.filter(
+                    pk__in=human_image_ids
+                ).update(
+                    contains_human=True
+                )
+
+            if non_human_image_ids:
+                ImageRecord.objects.filter(
+                    pk__in=non_human_image_ids
+                ).update(
+                    contains_human=False
+                )
+
     for raw_line in uploaded_file:
         try:
             if isinstance(raw_line, bytes):
-                line = raw_line.decode("utf-8").strip()
+                line = (
+                    raw_line
+                    .decode("utf-8")
+                    .strip()
+                )
             else:
                 line = raw_line.strip()
 
@@ -402,19 +546,32 @@ def import_speciesnet_results(uploaded_file):
             pending_items.append(item)
 
             if len(pending_items) >= batch_size:
-                flush_batch(pending_items)
+                flush_batch(
+                    pending_items
+                )
+
                 pending_items = []
 
         except (
             UnicodeDecodeError,
             json.JSONDecodeError,
         ) as error:
-            print("SpeciesNet parse failed:", error)
+            print(
+                "SpeciesNet parse failed:",
+                error,
+            )
+
             failed += 1
 
-    flush_batch(pending_items)
+    flush_batch(
+        pending_items
+    )
 
-    return created, updated, failed
+    return (
+        created,
+        updated,
+        failed,
+    )
 
 ## OCR Management
 TEMPERATURE_F_PATTERN = re.compile(

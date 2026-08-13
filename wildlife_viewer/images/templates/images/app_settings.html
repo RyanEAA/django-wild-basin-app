@@ -3,50 +3,214 @@
 {% block hero %}
 <section class="hero">
     <h1>Application Settings</h1>
-    <p>Update the Box credentials and tokens used by the Wild Basin application.</p>
+
+    <p>
+        Configure the Box application credentials used by
+        the Wild Basin application.
+    </p>
 </section>
 {% endblock %}
 
 {% block content %}
+
 <div class="content-page settings-page">
+
     <p>
-        <a class="btn-link" href="{% url 'researcher_dashboard' %}">← Back to researcher dashboard</a>
+        <a
+            class="btn-link"
+            href="{% url 'researcher_dashboard' %}"
+        >
+            ← Back to researcher dashboard
+        </a>
     </p>
 
     {% if messages %}
         {% for message in messages %}
-            <div class="alert success">{{ message }}</div>
+            <div
+                class="alert
+                {% if message.tags %}{{ message.tags }}{% endif %}"
+            >
+                {{ message }}
+            </div>
         {% endfor %}
     {% endif %}
 
+
     <section class="content-card settings-card">
-        <h2>Box Settings</h2>
-        <p>Changes take effect the next time the application requests or refreshes Box access.</p>
+
+        <h2>Box Application Credentials</h2>
+
+        <p>
+            Enter the credentials from the Box Developer Console.
+            Save these settings before authorizing the application.
+        </p>
 
         <form method="post">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
-                <div class="form-error">{{ form.non_field_errors }}</div>
+                <div class="form-error">
+                    {{ form.non_field_errors }}
+                </div>
             {% endif %}
 
-            {% for field in form %}
-                <div class="settings-field">
-                    <label for="{{ field.id_for_label }}"><strong>{{ field.label }}</strong></label>
-                    {{ field }}
-                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-                    {% for error in field.errors %}<div class="form-error">{{ error }}</div>{% endfor %}
-                </div>
-            {% endfor %}
+
+            <div class="settings-field">
+                <label for="{{ form.box_client_id.id_for_label }}">
+                    <strong>Box Client ID</strong>
+                </label>
+
+                {{ form.box_client_id }}
+
+                {% if form.box_client_id.help_text %}
+                    <small>
+                        {{ form.box_client_id.help_text }}
+                    </small>
+                {% endif %}
+
+                {% for error in form.box_client_id.errors %}
+                    <div class="form-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+
+
+            <div class="settings-field">
+                <label for="{{ form.box_client_secret.id_for_label }}">
+                    <strong>Box Client Secret</strong>
+                </label>
+
+                {{ form.box_client_secret }}
+
+                {% if form.box_client_secret.help_text %}
+                    <small>
+                        {{ form.box_client_secret.help_text }}
+                    </small>
+                {% endif %}
+
+                {% for error in form.box_client_secret.errors %}
+                    <div class="form-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+
+
+            <div class="settings-field">
+                <label for="{{ form.box_redirect_uri.id_for_label }}">
+                    <strong>Box Redirect URI</strong>
+                </label>
+
+                {{ form.box_redirect_uri }}
+
+                {% if form.box_redirect_uri.help_text %}
+                    <small>
+                        {{ form.box_redirect_uri.help_text }}
+                    </small>
+                {% endif %}
+
+                {% for error in form.box_redirect_uri.errors %}
+                    <div class="form-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+
 
             <div class="settings-actions">
-                <button class="btn-primary" type="submit">Save App Settings</button>
+                <button
+                    class="btn-primary"
+                    type="submit"
+                >
+                    Save Box Settings
+                </button>
             </div>
+
         </form>
 
         {% if app_settings.updated_at %}
-            <p class="settings-updated">Last updated: {{ app_settings.updated_at }}</p>
+            <p class="settings-updated">
+                Last updated:
+                {{ app_settings.updated_at }}
+            </p>
         {% endif %}
+
     </section>
+
+
+   <section class="content-card settings-card">
+        <h2>Box Authorization</h2>
+
+        {% if app_settings.box_access_token and app_settings.box_refresh_token %}
+            <div class="alert success">
+                Box is currently authorized.
+            </div>
+        {% endif %}
+
+        <ol>
+            <li>
+                Click the button below to open Box and approve access.
+            </li>
+
+            <li>
+                After approval, Box will redirect your browser to
+                <code>localhost</code>. The page may fail to load.
+                This is expected.
+            </li>
+
+            <li>
+                Copy the full URL from your browser's address bar,
+                return here, and paste it below.
+            </li>
+        </ol>
+
+        <p>
+            <a
+                class="btn-primary"
+                href="{% url 'box_oauth_start' %}"
+            >
+                {% if app_settings.box_access_token %}
+                    Reauthorize with Box
+                {% else %}
+                    Authorize with Box
+                {% endif %}
+            </a>
+        </p>
+
+        <form
+            method="post"
+            action="{% url 'box_oauth_complete' %}"
+        >
+            {% csrf_token %}
+
+            <div class="settings-field">
+                <label for="{{ oauth_completion_form.redirect_url.id_for_label }}">
+                    <strong>
+                        {{ oauth_completion_form.redirect_url.label }}
+                    </strong>
+                </label>
+
+                {{ oauth_completion_form.redirect_url }}
+
+                {% if oauth_completion_form.redirect_url.help_text %}
+                    <small>
+                        {{ oauth_completion_form.redirect_url.help_text }}
+                    </small>
+                {% endif %}
+            </div>
+
+            <div class="settings-actions">
+                <button
+                    class="btn-primary"
+                    type="submit"
+                >
+                    Complete Box Authorization
+                </button>
+            </div>
+        </form>
+    </section>
+
 </div>
+
 {% endblock %}

@@ -1,4 +1,5 @@
 import csv
+import secrets
 import tempfile
 import zipfile
 
@@ -18,6 +19,7 @@ from django.urls import reverse
 from .decorators import researcher_required
 from .forms import (
     BoxImageMetadataUploadForm,
+    BoxOAuthCompletionForm,
     SpeciesNetUploadForm,
     OCRUploadForm,
     GalleryFilterForm,
@@ -45,6 +47,17 @@ from .services.importers import (
     import_speciesnet_results,
     import_ocr_results,
 )
+
+from .services.box_auth import (
+    build_box_authorization_url,
+    exchange_box_authorization_code,
+    store_tokens,
+    parse_box_redirect_url
+)
+
+import secrets
+
+
 
 def get_species_label_from_prediction(prediction):
     if not prediction:
@@ -504,24 +517,42 @@ def researcher_dashboard(request):
 @researcher_required
 def app_settings(request):
     settings_obj = AppSettings.objects.order_by("pk").first()
+
     if settings_obj is None:
         settings_obj = AppSettings.objects.create()
 
     if request.method == "POST":
-        form = AppSettingsForm(request.POST, instance=settings_obj)
+        form = AppSettingsForm(
+            request.POST,
+            instance=settings_obj,
+        )
 
         if form.is_valid():
             form.save()
-            messages.success(request, "Application settings updated.")
+
+            messages.success(
+                request,
+                "Application settings updated.",
+            )
+
             return redirect("app_settings")
+
     else:
-        form = AppSettingsForm(instance=settings_obj)
+        form = AppSettingsForm(
+            instance=settings_obj,
+        )
 
-    return render(request, "images/app_settings.html", {
-        "form": form,
-        "app_settings": settings_obj,
-    })
+    oauth_completion_form = BoxOAuthCompletionForm()
 
+    return render(
+        request,
+        "images/app_settings.html",
+        {
+            "form": form,
+            "oauth_completion_form": oauth_completion_form,
+            "app_settings": settings_obj,
+        },
+    )
 
 @researcher_required
 def upload_metadata(request):
@@ -891,3 +922,184 @@ def research(request):
 
 def contact(request):
     return render(request, "images/contact.html")
+
+@researcher_required
+def box_oauth_start(request):
+    settings_obj = AppSettings.objects.order_by("pk").first()
+
+    if settings_obj is None:
+        settings_obj = AppSettings.objects.create()
+
+    if not settings_obj.box_client_id:
+        messages.error(
+            request,
+            "Save a Box Client ID before authorizing Box.",
+        )
+        return redirect("app_settings")
+
+    if not settings_obj.box_client_secret:
+        messages.error(
+            request,
+            "Save a Box Client Secret before authorizing Box.",
+        )
+        return redirect("app_settings")
+
+    state = secrets.token_urlsafe(32)
+
+    request.session["box_oauth_state"] = state
+
+    auth_url = build_box_authorization_url(
+        client_id=settings_obj.box_client_id,
+        state=state,
+    )
+
+    return redirect(auth_url)
+
+@researcher_required
+def box_oauth_callback(request):
+    settings_obj = AppSettings.objects.order_by("pk").first()
+
+    if settings_obj is None:
+        messages.error(
+            request,
+            "Application settings could not be found.",
+        )
+        return redirect("app_settings")
+
+    expected_state = request.session.pop(
+        "box_oauth_state",
+        None,
+    )
+
+    returned_state = request.GET.get("state")
+
+    if (
+        not expected_state
+        or not returned_state
+        or not secrets.compare_digest(
+            expected_state,
+            returned_state,
+        )
+    ):
+        messages.error(
+            request,
+            "Box authorization could not be verified.",
+        )
+        return redirect("app_settings")
+
+    box_error = request.GET.get("error")
+
+    if box_error:
+        messages.error(
+            request,
+            f"Box authorization failed: {box_error}",
+        )
+        return redirect("app_settings")
+
+    code = request.GET.get("code")
+
+    if not code:
+        messages.error(
+            request,
+            "Box did not return an authorization code.",
+        )
+        return redirect("app_settings")
+
+    try:
+        token_data = exchange_box_authorization_code(
+            client_id=settings_obj.box_client_id,
+            client_secret=settings_obj.box_client_secret,
+            redirect_uri=settings_obj.box_redirect_uri,
+            code=code,
+        )
+
+        store_tokens(
+            token_data["access_token"],
+            token_data["refresh_token"],
+        )
+
+    except Exception as error:
+        messages.error(
+            request,
+            f"Unable to complete Box authorization: {error}",
+        )
+        return redirect("app_settings")
+
+    messages.success(
+        request,
+        "Box authorization completed successfully.",
+    )
+
+    return redirect("app_settings")
+
+@researcher_required
+def box_oauth_complete(request):
+    if request.method != "POST":
+        return redirect("app_settings")
+
+    settings_obj = AppSettings.objects.order_by("pk").first()
+
+    if settings_obj is None:
+        messages.error(
+            request,
+            "Application settings could not be found.",
+        )
+        return redirect("app_settings")
+
+    form = BoxOAuthCompletionForm(
+        request.POST
+    )
+
+    if not form.is_valid():
+        messages.error(
+            request,
+            "Please paste a valid redirected localhost URL.",
+        )
+        return redirect("app_settings")
+
+    try:
+        code, returned_state = parse_box_redirect_url(
+            form.cleaned_data["redirect_url"]
+        )
+
+        expected_state = request.session.pop(
+            "box_oauth_state",
+            None,
+        )
+
+        if (
+            not expected_state
+            or not secrets.compare_digest(
+                expected_state,
+                returned_state,
+            )
+        ):
+            raise ValueError(
+                "Box authorization could not be verified. "
+                "Start the authorization process again."
+            )
+
+        token_data = exchange_box_authorization_code(
+            client_id=settings_obj.box_client_id,
+            client_secret=settings_obj.box_client_secret,
+            code=code,
+        )
+
+        store_tokens(
+            token_data["access_token"],
+            token_data["refresh_token"],
+        )
+
+    except Exception as error:
+        messages.error(
+            request,
+            f"Unable to complete Box authorization: {error}",
+        )
+        return redirect("app_settings")
+
+    messages.success(
+        request,
+        "Box authorization completed successfully.",
+    )
+
+    return redirect("app_settings")

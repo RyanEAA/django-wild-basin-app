@@ -20,7 +20,22 @@ urlpatterns = [
     path("about/", views.about, name="about"),
     path("research/", views.research, name="research"),
     path("contact/", views.contact, name="contact"),
-    path("ajax/path-search/", views.path_search, name="path_search")
+    path("ajax/path-search/", views.path_search, name="path_search"),
+
+    path("researcher/settings/box/connect/", views.box_oauth_start, name="box_oauth_start",),
+    path("researcher/settings/box/callback/", views.box_oauth_callback, name="box_oauth_callback",),
+
+    path(
+        "researcher/settings/box/connect/",
+        views.box_oauth_start,
+        name="box_oauth_start",
+    ),
+
+    path(
+        "researcher/settings/box/complete/",
+        views.box_oauth_complete,
+        name="box_oauth_complete",
+    ),
 
     
     ]

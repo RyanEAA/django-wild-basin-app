@@ -367,24 +367,41 @@ SpeciesDetectionFormSet = modelformset_factory(
 class AppSettingsForm(forms.ModelForm):
     class Meta:
         model = AppSettings
+
         fields = [
             "box_client_id",
             "box_client_secret",
-            "box_access_token",
-            "box_refresh_token",
         ]
+
         widgets = {
-            "box_client_id": forms.TextInput(attrs={"autocomplete": "off"}),
+            "box_client_id": forms.TextInput(),
             "box_client_secret": forms.PasswordInput(
-                attrs={"autocomplete": "new-password"},
                 render_value=True,
             ),
-            "box_access_token": forms.Textarea(attrs={"rows": 4, "spellcheck": "false"}),
-            "box_refresh_token": forms.Textarea(attrs={"rows": 4, "spellcheck": "false"}),
         }
-        labels = {
-            "box_client_id": "Box Client ID",
-            "box_client_secret": "Box Client Secret",
-            "box_access_token": "Box Access Token",
-            "box_refresh_token": "Box Refresh Token",
+
+        help_texts = {
+            "box_client_id": (
+                "Client ID from the Box Developer Console."
+            ),
+            "box_client_secret": (
+                "Client secret from the Box Developer Console."
+            ),
         }
+
+class BoxOAuthCompletionForm(forms.Form):
+    redirect_url = forms.URLField(
+        label="Redirected localhost URL",
+        widget=forms.URLInput(
+            attrs={
+                "placeholder": (
+                    "http://localhost:3000/callback"
+                    "?code=...&state=..."
+                ),
+            }
+        ),
+        help_text=(
+            "After approving access in Box, copy the full "
+            "localhost URL from your browser and paste it here."
+        ),
+    )

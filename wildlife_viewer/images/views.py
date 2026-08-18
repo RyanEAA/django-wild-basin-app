@@ -294,7 +294,7 @@ def export_csv(request):
     return response
 
 
-def _build_gallery_queryset(request):
+def _build_gallery_queryset(request, *, optimize_species_filter=False):
     is_researcher = user_is_researcher(request.user)
 
     images = ImageRecord.objects.order_by("-created_at")
@@ -357,23 +357,33 @@ def _build_gallery_queryset(request):
             ]
 
             if selected_species:
-                species_query = Q()
-
-                for selected_label in selected_species:
-                    species_query |= Q(
-                        species_result__prediction__icontains=selected_label
+                if optimize_species_filter:
+                    # Gallery selections come from SpeciesLabel, whose names are
+                    # normalized from SpeciesDetection.prediction. Use an exact
+                    # indexed lookup inside EXISTS instead of joining detection
+                    # rows and deduplicating ImageRecord with DISTINCT.
+                    matching_detection = SpeciesDetection.objects.filter(
+                        species_result__image_id=OuterRef("pk"),
+                        prediction__in=selected_species,
                     )
+                    images = images.filter(Exists(matching_detection))
+                else:
+                    # Preserve the existing broader semantics for exports and
+                    # other callers of this shared queryset builder.
+                    species_query = Q()
 
-                    species_query |= Q(
-                        species_result__species_detections__prediction__icontains=
-                        selected_label
-                    )
+                    for selected_label in selected_species:
+                        species_query |= Q(
+                            species_result__prediction__icontains=selected_label
+                        )
 
-                images = images.filter(
-                    species_query
-                )
+                        species_query |= Q(
+                            species_result__species_detections__prediction__icontains=
+                            selected_label
+                        )
 
-                needs_distinct = True
+                    images = images.filter(species_query)
+                    needs_distinct = True
 
         if has_ocr:
             images = images.filter(
@@ -620,16 +630,16 @@ def cache_image_ajax(request, file_id):
     })
 
 def gallery(request):
-    form, images, is_researcher = _build_gallery_queryset(request)
-
-    # Gallery pages only show images that have at least one normalized
-    # SpeciesDetection. Keep this out of _build_gallery_queryset() so exports
-    # continue to include records without detections unless the user filters
-    # them explicitly. Exists avoids multiplying ImageRecord rows with a join.
-    detection_exists = SpeciesDetection.objects.filter(
-        species_result__image_id=OuterRef("pk")
+    form, images, is_researcher = _build_gallery_queryset(
+        request,
+        optimize_species_filter=True,
     )
-    images = images.filter(Exists(detection_exists))
+
+    # Gallery pages only show images that have at least one SpeciesDetection.
+    # This denormalized indexed flag is maintained by SpeciesNet imports and
+    # researcher edits, avoiding a correlated EXISTS over ~1M ImageRecords.
+    # It intentionally remains gallery-only so exports retain existing behavior.
+    images = images.filter(has_species_detection=True)
 
     # The gallery template reads SpeciesNet/OCR data for every card. Load the
     # one-to-one rows in the main query and detections in one additional query
@@ -832,10 +842,14 @@ def image_detail(request, file_id):
                     prediction_contains_human
                     or detection_contains_human
                 )
+                image.has_species_detection = (
+                    species_result.species_detections.exists()
+                )
 
                 image.save(
                     update_fields=[
-                        "contains_human"
+                        "contains_human",
+                        "has_species_detection",
                     ]
                 )
 

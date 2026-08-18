@@ -51,6 +51,14 @@ class ImageRecord(models.Model):
         db_index=True,
     )
 
+    # Denormalized gallery index. SpeciesDetection remains the source of truth;
+    # this flag exists so the public gallery can avoid a correlated EXISTS
+    # check across the full ImageRecord table on every request.
+    has_species_detection = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
     cache_last_accessed = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -320,8 +320,12 @@ def import_speciesnet_results(uploaded_file):
 
             species_results = []
 
-            # Track contains_human and autocomplete labels for this batch.
+            # Track denormalized gallery flags and autocomplete labels.
             human_flags = {}
+            has_detection_flags = {
+                item["file_id"]: False
+                for item in normalized_items
+            }
             lookup_labels = set()
 
             for item in normalized_items:
@@ -517,6 +521,8 @@ def import_speciesnet_results(uploaded_file):
                     if normalized_detection_prediction:
                         lookup_labels.add(normalized_detection_prediction)
 
+                    has_detection_flags[file_id] = True
+
                     detection_rows.append(
                         SpeciesDetection(
                             species_result=species_result,
@@ -538,6 +544,31 @@ def import_speciesnet_results(uploaded_file):
                     detection_rows,
                     batch_size=batch_size,
                 )
+
+            # Maintain ImageRecord.has_species_detection for every re-imported
+            # image. This is based on the rows that survived importer filtering,
+            # so a re-import with zero valid detections correctly clears the flag.
+            detection_image_ids = []
+            no_detection_image_ids = []
+
+            for file_id, has_detection in has_detection_flags.items():
+                image = image_lookup.get(file_id)
+                if image is None:
+                    continue
+                if has_detection:
+                    detection_image_ids.append(image.pk)
+                else:
+                    no_detection_image_ids.append(image.pk)
+
+            if detection_image_ids:
+                ImageRecord.objects.filter(
+                    pk__in=detection_image_ids
+                ).update(has_species_detection=True)
+
+            if no_detection_image_ids:
+                ImageRecord.objects.filter(
+                    pk__in=no_detection_image_ids
+                ).update(has_species_detection=False)
 
             ensure_species_labels(lookup_labels)
 

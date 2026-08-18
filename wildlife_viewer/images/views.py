@@ -13,7 +13,7 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.urls import reverse
 
 from .decorators import researcher_required
@@ -332,9 +332,19 @@ def _build_gallery_queryset(request):
             needs_distinct = True
 
         if path:
-            images = images.filter(
-                path__icontains=path
-            )
+            selected_paths = [
+                item.strip()
+                for item in path.split(",")
+                if item.strip()
+            ]
+
+            if selected_paths:
+                path_query = Q()
+
+                for selected_path in selected_paths:
+                    path_query |= Q(path__icontains=selected_path)
+
+                images = images.filter(path_query)
 
         if species:
             selected_species = [
@@ -677,6 +687,28 @@ def cache_image_ajax(request, file_id):
 
 def gallery(request):
     form, images, is_researcher = _build_gallery_queryset(request)
+
+    # Gallery pages only show images that have at least one normalized
+    # SpeciesDetection. Keep this out of _build_gallery_queryset() so exports
+    # continue to include records without detections unless the user filters
+    # them explicitly. Exists avoids multiplying ImageRecord rows with a join.
+    detection_exists = SpeciesDetection.objects.filter(
+        species_result__image_id=OuterRef("pk")
+    )
+    images = images.filter(Exists(detection_exists))
+
+    # The gallery template reads SpeciesNet/OCR data for every card. Load the
+    # one-to-one rows in the main query and detections in one additional query
+    # instead of issuing queries per image.
+    images = images.select_related(
+        "species_result",
+        "ocr_result",
+    ).prefetch_related(
+        Prefetch(
+            "species_result__species_detections",
+            queryset=SpeciesDetection.objects.order_by("id"),
+        )
+    )
 
     paginator = Paginator(images, 20)
     page_obj = paginator.get_page(

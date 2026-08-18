@@ -155,42 +155,7 @@
     {% endif %}
 </div>
 
-<script>
-$(document).ready(function () {
-    const speciesInput = $("#id_species");
-    const speciesSelect = $("#species-select");
 
-    speciesSelect.select2({
-        placeholder: "Search species...",
-        ajax: {
-            url: "{% url 'species_search' %}",
-            dataType: "json",
-            delay: 250,
-            data: function (params) {
-                return { q: params.term || "" };
-            },
-            processResults: function (data) {
-                return data;
-            }
-        },
-        tags: true
-    });
-
-    speciesSelect.on("change", function () {
-        speciesInput.val((speciesSelect.val() || []).join(","));
-    });
-
-    const existingSpecies = speciesInput.val();
-
-    if (existingSpecies) {
-        existingSpecies.split(",").forEach(function (species) {
-            speciesSelect.append(new Option(species, species, true, true));
-        });
-
-        speciesSelect.trigger("change");
-    }
-});
-</script>
 
 <script>
     $(document).ready(function () {

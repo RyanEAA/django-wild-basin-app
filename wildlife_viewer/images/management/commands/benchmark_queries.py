@@ -1,6 +1,7 @@
 from statistics import median
 from time import perf_counter
 
+from django.contrib.auth.models import AnonymousUser
 from django.core.management.base import BaseCommand
 from django.db import connection
 from django.test import RequestFactory
@@ -46,6 +47,11 @@ class Command(BaseCommand):
         repeat = max(1, options["repeat"])
         factory = RequestFactory()
 
+        def public_get(path, data=None):
+            request = factory.get(path, data or {})
+            request.user = AnonymousUser()
+            return request
+
         species = options.get("species") or self._default_species()
         camera_path = options.get("camera_path") or self._default_path()
         search = options.get("search")
@@ -66,7 +72,7 @@ class Command(BaseCommand):
         scenarios = [
             (
                 "Gallery: unfiltered public page",
-                lambda: gallery(factory.get("/")),
+                lambda: gallery(public_get("/")),
             ),
         ]
 
@@ -76,7 +82,7 @@ class Command(BaseCommand):
                     (
                         f"Species autocomplete: {self._autocomplete_term(species)!r}",
                         lambda: species_search(
-                            factory.get(
+                            public_get(
                                 "/ajax/species-search/",
                                 {"q": self._autocomplete_term(species)},
                             )
@@ -84,7 +90,7 @@ class Command(BaseCommand):
                     ),
                     (
                         f"Gallery: species={species!r}",
-                        lambda: gallery(factory.get("/", {"species": species})),
+                        lambda: gallery(public_get("/", {"species": species})),
                     ),
                 ]
             )
@@ -95,7 +101,7 @@ class Command(BaseCommand):
                     (
                         f"Path autocomplete: {self._autocomplete_term(camera_path)!r}",
                         lambda: path_search(
-                            factory.get(
+                            public_get(
                                 "/ajax/path-search/",
                                 {"q": self._autocomplete_term(camera_path)},
                             )
@@ -103,7 +109,7 @@ class Command(BaseCommand):
                     ),
                     (
                         f"Gallery: path={camera_path!r}",
-                        lambda: gallery(factory.get("/", {"path": camera_path})),
+                        lambda: gallery(public_get("/", {"path": camera_path})),
                     ),
                 ]
             )
@@ -112,7 +118,7 @@ class Command(BaseCommand):
             scenarios.append(
                 (
                     f"Gallery: search={search!r}",
-                    lambda: gallery(factory.get("/", {"search": search})),
+                    lambda: gallery(public_get("/", {"search": search})),
                 )
             )
 

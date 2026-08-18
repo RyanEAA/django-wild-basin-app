@@ -35,6 +35,8 @@ from .models import (
     OCRResult, 
     ImportJob, 
     SpeciesDetection,
+    SpeciesLabel,
+    CameraPath,
     AppSettings,
     )
 
@@ -46,6 +48,7 @@ from .services.importers import (
     import_box_images,
     import_speciesnet_results,
     import_ocr_results,
+    ensure_species_labels,
 )
 
 from .services.box_auth import (
@@ -405,31 +408,22 @@ def _build_gallery_queryset(request):
 def path_search(request):
     query = request.GET.get("q", "").strip()
 
-    matching_paths = ImageRecord.objects.exclude(
-        path__isnull=True
-    ).exclude(
-        path=""
-    )
+    matching_paths = CameraPath.objects.all()
 
     if query:
         matching_paths = matching_paths.filter(
             path__icontains=query
         )
 
-    matching_paths = (
-        matching_paths
-        .values_list("path", flat=True)
-        .distinct()
-        .order_by("path")[:20]
-    )
+    matching_paths = matching_paths.order_by("path")[:20]
 
     return JsonResponse({
         "results": [
             {
-                "id": image_path,
-                "text": image_path,
+                "id": item.path,
+                "text": item.path,
             }
-            for image_path in matching_paths
+            for item in matching_paths
         ]
     })
 
@@ -437,86 +431,26 @@ def species_search(request):
     query = request.GET.get("q", "").strip()
     is_researcher = user_is_researcher(request.user)
 
-    # Original image-level SpeciesNet predictions.
-    image_predictions = SpeciesNetResult.objects.exclude(
-        prediction__isnull=True,
-    ).exclude(
-        prediction="",
-    )
+    labels = SpeciesLabel.objects.all()
 
-    # Editable per-detection predictions.
-    detection_predictions = SpeciesDetection.objects.exclude(
-        prediction__isnull=True,
-    ).exclude(
-        prediction="",
-    )
-
-    # Public users should never receive human as a suggestion.
     if not is_researcher:
-        image_predictions = image_predictions.exclude(
-            prediction__icontains="human",
-        )
-
-        detection_predictions = detection_predictions.exclude(
-            prediction__icontains="human",
-        )
+        labels = labels.filter(is_human=False)
 
     if query:
-        image_predictions = image_predictions.filter(
-            prediction__icontains=query,
-        )
+        labels = labels.filter(name__icontains=query)
 
-        detection_predictions = detection_predictions.filter(
-            prediction__icontains=query,
-        )
-
-    image_prediction_values = list(
-        image_predictions
-        .values_list("prediction", flat=True)
-        .distinct()
-        .order_by("prediction")[:200]
-    )
-
-    detection_prediction_values = list(
-        detection_predictions
-        .values_list("prediction", flat=True)
-        .distinct()
-        .order_by("prediction")[:200]
-    )
-
-    labels = []
-    seen_labels = set()
-
-    for prediction in (
-        image_prediction_values
-        + detection_prediction_values
-    ):
-        label = clean_species_label(prediction)
-
-        if not label:
-            continue
-
-        normalized_label = label.casefold()
-
-        if normalized_label in seen_labels:
-            continue
-
-        seen_labels.add(normalized_label)
-        labels.append(label)
-
-    labels.sort(key=str.casefold)
+    labels = labels.order_by("name")[:20]
 
     return JsonResponse({
         "results": [
             {
-                "id": label,
-                "text": label,
+                "id": label.name,
+                "text": label.name,
             }
-            for label in labels[:20]
+            for label in labels
         ]
     })
 
-@researcher_required
 def researcher_dashboard(request):
     box_token_status = check_box_token_status()
 
@@ -863,6 +797,14 @@ def image_detail(request, file_id):
 
             ocr_form.save()
             detection_formset.save()
+
+            ensure_species_labels(
+                [
+                    detection.prediction
+                    for detection in species_result.species_detections.all()
+                    if detection.prediction
+                ]
+            )
 
             if species_detections_changed:
                 species_result.status = "updated"

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings, SpeciesDetection
+    ImageRecord, SpeciesNetResult, OCRResult, ImportJob, AppSettings, SpeciesDetection, SpeciesLabel, CameraPath
 )
 
 @admin.register(ImageRecord)
@@ -80,3 +80,16 @@ class ImportJobAdmin(admin.ModelAdmin):
 @admin.register(AppSettings)
 class AppSettingsAdmin(admin.ModelAdmin):
     list_display = ("updated_at",)
+
+
+@admin.register(SpeciesLabel)
+class SpeciesLabelAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_human")
+    list_filter = ("is_human",)
+    search_fields = ("name",)
+
+
+@admin.register(CameraPath)
+class CameraPathAdmin(admin.ModelAdmin):
+    list_display = ("path",)
+    search_fields = ("path",)

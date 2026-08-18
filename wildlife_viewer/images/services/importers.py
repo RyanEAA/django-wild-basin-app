@@ -5,7 +5,8 @@ from django.db import transaction
 
 import json
 from ..models import (
-    SpeciesNetResult, SpeciesDetection, ImageRecord, OCRResult
+    SpeciesNetResult, SpeciesDetection, ImageRecord, OCRResult,
+    SpeciesLabel, CameraPath,
 )
 
 def import_box_images(uploaded_file):
@@ -14,6 +15,7 @@ def import_box_images(uploaded_file):
     created_count = 0
     updated_count = 0
     failed_count = 0
+    imported_paths = set()
 
     for item in data:
         try:
@@ -28,6 +30,10 @@ def import_box_images(uploaded_file):
                 },
             )
 
+            path = (item.get("path") or "").strip()
+            if path:
+                imported_paths.add(path)
+
             if created:
                 created_count += 1
             else:
@@ -35,6 +41,8 @@ def import_box_images(uploaded_file):
 
         except Exception:
             failed_count += 1
+
+    ensure_camera_paths(imported_paths)
 
     return created_count, updated_count, failed_count
 
@@ -55,6 +63,46 @@ def clean_species_label(label):
 def is_human_label(label):
     label = label.lower()
     return "human" in label or "homo sapiens" in label
+
+
+def ensure_camera_paths(paths):
+    """Add unique non-empty paths to the autocomplete lookup table."""
+    normalized_paths = {
+        str(path).strip()
+        for path in paths
+        if path and str(path).strip()
+    }
+
+    if normalized_paths:
+        CameraPath.objects.bulk_create(
+            [CameraPath(path=path) for path in normalized_paths],
+            ignore_conflicts=True,
+            batch_size=500,
+        )
+
+
+def ensure_species_labels(labels):
+    """Add normalized labels to the autocomplete lookup table."""
+    normalized = {}
+
+    for raw_label in labels:
+        label = clean_species_label(raw_label)
+        if not label:
+            continue
+        normalized[label.casefold()] = label
+
+    if normalized:
+        SpeciesLabel.objects.bulk_create(
+            [
+                SpeciesLabel(
+                    name=label,
+                    is_human=is_human_label(label),
+                )
+                for label in normalized.values()
+            ],
+            ignore_conflicts=True,
+            batch_size=500,
+        )
 
 def bbox_values(bbox):
     return {
@@ -272,8 +320,9 @@ def import_speciesnet_results(uploaded_file):
 
             species_results = []
 
-            # Track contains_human for every image in this batch.
+            # Track contains_human and autocomplete labels for this batch.
             human_flags = {}
+            lookup_labels = set()
 
             for item in normalized_items:
                 file_id = item["file_id"]
@@ -295,6 +344,10 @@ def import_speciesnet_results(uploaded_file):
                         model_version=item["model_version"],
                     )
                 )
+
+                image_label = clean_species_label(item["prediction"])
+                if image_label:
+                    lookup_labels.add(image_label)
 
                 # Image-level prediction check.
                 image_prediction = (
@@ -455,16 +508,21 @@ def import_speciesnet_results(uploaded_file):
                         detection_prediction_score = None
                         detection_prediction_source = ""
 
+                    normalized_detection_prediction = (
+                        detection_prediction
+                        .split(";")[-1]
+                        .strip()
+                    )
+
+                    if normalized_detection_prediction:
+                        lookup_labels.add(normalized_detection_prediction)
+
                     detection_rows.append(
                         SpeciesDetection(
                             species_result=species_result,
                             detection_type=detection_type,
                             detection_confidence=confidence,
-                            prediction=(
-                                detection_prediction
-                                .split(";")[-1]
-                                .strip()
-                            ),
+                            prediction=normalized_detection_prediction,
                             prediction_score=(
                                 detection_prediction_score
                             ),
@@ -480,6 +538,8 @@ def import_speciesnet_results(uploaded_file):
                     detection_rows,
                     batch_size=batch_size,
                 )
+
+            ensure_species_labels(lookup_labels)
 
             # ----------------------------------------
             # Update ImageRecord.contains_human

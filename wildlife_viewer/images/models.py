@@ -217,6 +217,34 @@ class SpeciesDetection(models.Model):
             f"({self.detection_confidence})"
         )
 
+
+class SpeciesLabel(models.Model):
+    """Small autocomplete index for normalized species labels.
+
+    ImageRecord/SpeciesNetResult/SpeciesDetection remain the source of truth.
+    This table exists only to make suggestion queries cheap.
+    """
+    name = models.CharField(max_length=255, unique=True)
+    is_human = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class CameraPath(models.Model):
+    """Small autocomplete index for unique Box/camera paths."""
+    path = models.TextField(unique=True)
+
+    class Meta:
+        ordering = ["path"]
+
+    def __str__(self):
+        return self.path
+
+
 class AppSettings(models.Model):
     box_client_id = models.TextField(blank=True)
     box_client_secret = models.TextField(blank=True)

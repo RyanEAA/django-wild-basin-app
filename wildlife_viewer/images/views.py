@@ -636,10 +636,24 @@ def gallery(request):
     )
 
     # Gallery pages only show images that have at least one SpeciesDetection.
-    # This denormalized indexed flag is maintained by SpeciesNet imports and
-    # researcher edits, avoiding a correlated EXISTS over ~1M ImageRecords.
-    # It intentionally remains gallery-only so exports retain existing behavior.
-    images = images.filter(has_species_detection=True)
+    # When a species filter is active, _build_gallery_queryset() already adds
+    # an exact SpeciesDetection EXISTS condition, which also proves that a
+    # detection exists. Avoid adding a second redundant condition in that case.
+    #
+    # For unfiltered/path-filtered pages, retain the correlated EXISTS strategy
+    # that benchmarked much better on SQLite than filtering the low-selectivity
+    # has_species_detection boolean column. The denormalized flag remains
+    # maintained for future use but is intentionally not part of this query.
+    selected_species = (
+        form.cleaned_data.get("species")
+        if form.is_bound and form.is_valid()
+        else None
+    )
+    if not selected_species:
+        detection_exists = SpeciesDetection.objects.filter(
+            species_result__image_id=OuterRef("pk")
+        )
+        images = images.filter(Exists(detection_exists))
 
     # The gallery template reads SpeciesNet/OCR data for every card. Load the
     # one-to-one rows in the main query and detections in one additional query

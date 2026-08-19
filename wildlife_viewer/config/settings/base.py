@@ -1,6 +1,9 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(BASE_DIR.parent / ".env")
 
 
 # -----------------------------------------------------------------------------
@@ -18,6 +21,7 @@ INSTALLED_APPS = [
 
     # Local apps
     "images",
+    "pgdata",
 ]
 
 
@@ -76,6 +80,21 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+# Parallel PostgreSQL build. The current site continues using ``default``
+# (SQLite) until cutover. Set POSTGRES_DB to enable the secondary alias.
+if os.environ.get("POSTGRES_DB"):
+    DATABASES["postgresql"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ["POSTGRES_DB"],
+        "USER": os.environ.get("POSTGRES_USER", "wildbasin"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
+        "HOST": os.environ.get("POSTGRES_HOST", "127.0.0.1"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "CONN_MAX_AGE": int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
+    }
+
+DATABASE_ROUTERS = ["pgdata.router.PostgreSQLDataRouter"]
 
 
 # -----------------------------------------------------------------------------

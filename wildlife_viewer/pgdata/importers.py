@@ -112,17 +112,49 @@ def _json_array_items(uploaded_file, read_size=1024 * 1024):
             yield item
 
 
-def _jsonl_items(uploaded_file):
-    for raw_line in uploaded_file:
+def _jsonl_items(uploaded_file, on_error=None):
+    """Yield JSON objects from a JSONL stream.
+
+    Malformed lines are reported through ``on_error`` and skipped instead of
+    aborting a long-running production import.
+    """
+    for line_number, raw_line in enumerate(uploaded_file, start=1):
         if isinstance(raw_line, bytes):
-            line = raw_line.decode("utf-8").strip()
+            try:
+                line = raw_line.decode("utf-8").strip()
+            except UnicodeDecodeError as exc:
+                if on_error is not None:
+                    on_error(
+                        line_number=line_number,
+                        error=exc,
+                        content=repr(raw_line[:200]),
+                    )
+                continue
         else:
             line = str(raw_line).strip()
+
         if not line:
             continue
-        item = json.loads(line)
+
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError as exc:
+            if on_error is not None:
+                on_error(
+                    line_number=line_number,
+                    error=exc,
+                    content=line[:200],
+                )
+            continue
+
         if isinstance(item, dict):
             yield item
+        elif on_error is not None:
+            on_error(
+                line_number=line_number,
+                error=ValueError("JSONL row is not a JSON object"),
+                content=line[:200],
+            )
 
 
 def _ensure_taxa(raw_labels, using=DEFAULT_DB):
@@ -328,8 +360,20 @@ def import_speciesnet_results(uploaded_file, *, using=DEFAULT_DB, batch_size=200
     classifications/detections, preventing stale child rows.
     """
     created = updated = failed = processed = 0
+    malformed_count = 0
 
-    for raw_batch in _chunks(_jsonl_items(uploaded_file), batch_size):
+    def handle_json_error(*, line_number, error, content):
+        nonlocal malformed_count
+        malformed_count += 1
+        print(
+            f"  WARNING: malformed SpeciesNet JSONL line {line_number}: {error}"
+        )
+        print(f"           content={content!r}")
+
+    for raw_batch in _chunks(
+        _jsonl_items(uploaded_file, on_error=handle_json_error),
+        batch_size,
+    ):
         normalized = []
         for item in raw_batch:
             try:
@@ -514,14 +558,27 @@ def import_speciesnet_results(uploaded_file, *, using=DEFAULT_DB, batch_size=200
         processed += len(raw_batch)
         _report(progress, source="SpeciesNet", processed=processed, created=created, updated=updated, failed=failed)
 
+    failed += malformed_count
     return created, updated, failed
 
 
 def import_ocr_results(uploaded_file, *, using=DEFAULT_DB, batch_size=5000, progress=None):
     """Import OCR JSONL and denormalize parsed filter fields onto ImageRecord."""
     created = updated = failed = processed = 0
+    malformed_count = 0
 
-    for batch in _chunks(_jsonl_items(uploaded_file), batch_size):
+    def handle_json_error(*, line_number, error, content):
+        nonlocal malformed_count
+        malformed_count += 1
+        print(
+            f"  WARNING: malformed OCR JSONL line {line_number}: {error}"
+        )
+        print(f"           content={content!r}")
+
+    for batch in _chunks(
+        _jsonl_items(uploaded_file, on_error=handle_json_error),
+        batch_size,
+    ):
         valid = []
         for item in batch:
             file_id = item.get("file_id")
@@ -591,4 +648,5 @@ def import_ocr_results(uploaded_file, *, using=DEFAULT_DB, batch_size=5000, prog
         processed += len(batch)
         _report(progress, source="OCR", processed=processed, created=created, updated=updated, failed=failed)
 
+    failed += malformed_count
     return created, updated, failed

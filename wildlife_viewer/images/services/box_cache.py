@@ -4,7 +4,8 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
-from images.models import AppSettings, ImageRecord
+from images.models import AppSettings
+from pgdata.models import ImageRecord
 
 from .box_auth import get_box_client
 
@@ -89,7 +90,7 @@ def ensure_cached_image(image_record):
     # below also lets us normalize legacy filenames without racing another
     # gallery request for the same image.
     if image_record.cached_image:
-        with transaction.atomic():
+        with transaction.atomic(using="postgresql"):
             locked_image = ImageRecord.objects.select_for_update().get(
                 pk=image_record.pk
             )
@@ -125,7 +126,7 @@ def ensure_cached_image(image_record):
     # Lock the row before writing. If another request finished while this one
     # was downloading from Box, reuse that file rather than creating a Django
     # storage suffix such as ``_<random>``.
-    with transaction.atomic():
+    with transaction.atomic(using="postgresql"):
         locked_image = ImageRecord.objects.select_for_update().get(
             pk=image_record.pk
         )

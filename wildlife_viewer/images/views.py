@@ -13,7 +13,8 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Prefetch, Q, TextField
+from django.db.models.functions import Cast
 from django.urls import reverse
 
 from .decorators import researcher_required
@@ -29,26 +30,24 @@ from .forms import (
     AppSettingsForm
 )
 
-from .models import (
-    ImageRecord, 
-    SpeciesNetResult, 
-    OCRResult, 
-    ImportJob, 
+from .models import ImportJob, AppSettings
+from pgdata.models import (
+    ImageRecord,
+    SpeciesNetResult,
+    OCRResult,
     SpeciesDetection,
-    SpeciesLabel,
+    SpeciesTaxon,
     CameraPath,
-    AppSettings,
-    )
+)
 
 from .services.box_cache import (
     ensure_cached_image, check_box_token_status
 )
 
-from .services.importers import (
+from pgdata.importers import (
     import_box_images,
     import_speciesnet_results,
     import_ocr_results,
-    ensure_species_labels,
 )
 
 from .services.box_auth import (
@@ -91,25 +90,12 @@ def clean_species_label(label):
 
 
 def _format_capture_datetime(ocr_result):
-    capture_date = ""
-    capture_time = ""
-
     if not ocr_result:
-        return capture_date, capture_time
-
-    if ocr_result.capture_datetime:
-        capture_date = ocr_result.capture_datetime.date().isoformat()
-        capture_time = ocr_result.capture_datetime.strftime("%H:%M:%S")
-        return capture_date, capture_time
-
-    if ocr_result.capture_date:
-        capture_date = ocr_result.capture_date.isoformat()
-
-    if ocr_result.capture_time:
-        capture_time = ocr_result.capture_time.strftime("%H:%M:%S")
-
+        return "", ""
+    image = ocr_result.image
+    capture_date = image.capture_date.isoformat() if image.capture_date else ""
+    capture_time = image.capture_time.strftime("%H:%M:%S") if image.capture_time else ""
     return capture_date, capture_time
-
 
 def _write_json_line(file_handle, payload):
     file_handle.write(
@@ -119,27 +105,24 @@ def _write_json_line(file_handle, payload):
 
 
 def export_json_bundle(request):
-    """Export gallery records in formats accepted by the existing importers."""
+    """Export the current filtered PostgreSQL records in re-importable formats."""
     _, images, _ = _build_gallery_queryset(request)
+    images = images.select_related(
+        "camera_path", "species_result__top_taxon", "ocr_result"
+    ).prefetch_related(
+        Prefetch(
+            "species_result__detections",
+            queryset=SpeciesDetection.objects.select_related("reviewed_taxon").order_by("detection_index", "id"),
+        )
+    )
 
-    # TemporaryFile automatically spills to disk and is removed when the
-    # FileResponse finishes closing it. This avoids holding a large export in RAM.
     export_file = tempfile.TemporaryFile()
-
-    with zipfile.ZipFile(
-        export_file,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-        allowZip64=True,
-    ) as archive:
-        # Python's zipfile module permits only one writable member handle at a
-        # time. Fully close each entry before opening the next one.
+    with zipfile.ZipFile(export_file, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
         with archive.open("image_urls.json", mode="w") as image_file:
             image_file.write(b"[\n")
-            first_image = True
-
+            first = True
             for image in images.iterator(chunk_size=1000):
-                image_payload = {
+                payload = {
                     "file_id": image.file_id,
                     "file_name": image.file_name,
                     "path": image.path,
@@ -147,319 +130,186 @@ def export_json_bundle(request):
                     "direct_download_url": image.direct_download_url,
                     "preview_url": image.preview_url,
                 }
-
-                if not first_image:
+                if not first:
                     image_file.write(b",\n")
-
-                image_file.write(
-                    json.dumps(
-                        image_payload,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                )
-                first_image = False
-
+                image_file.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+                first = False
             image_file.write(b"\n]\n")
 
         with archive.open("speciesnet_predictions.jsonl", mode="w") as species_file:
             for image in images.iterator(chunk_size=1000):
-                species_result = getattr(image, "species_result", None)
-
-                if species_result is not None:
-                    # Normal SpeciesNet records keep the original raw detection
-                    # payload. Once a researcher edits a per-detection prediction,
-                    # status is changed to ``updated`` and the editable
-                    # SpeciesDetection rows become the authoritative export data.
-                    if species_result.status == "updated":
-                        exported_detections = []
-
-                        for detection in species_result.species_detections.all().order_by("id"):
-                            exported_detection = {
-                                "label": detection.detection_type or "",
-                                "conf": detection.detection_confidence,
-                                "bbox": [
-                                    detection.bbox_x,
-                                    detection.bbox_y,
-                                    detection.bbox_width,
-                                    detection.bbox_height,
-                                ],
-                                # These fields are Wild Basin round-trip metadata.
-                                # The updated importer recognizes them while the
-                                # original SpeciesNet fields remain intact.
-                                "prediction": detection.prediction or "",
-                                "prediction_score": detection.prediction_score,
-                                "prediction_source": detection.prediction_source or "",
-                            }
-                            exported_detections.append(exported_detection)
-                    else:
-                        exported_detections = species_result.detections or []
-
-                    _write_json_line(species_file, {
-                        "status": species_result.status or "",
-                        "file_id": image.file_id,
-                        "file_name": image.file_name,
-                        "file_url": image.file_url,
-                        "prediction": {
-                            "prediction": species_result.prediction or "",
-                            "prediction_score": species_result.prediction_score,
-                            "prediction_source": species_result.prediction_source or "",
-                            "classifications": species_result.classifications or {},
-                            "detections": exported_detections,
-                            "model_version": species_result.model_version or "",
-                        },
-                    })
+                result = getattr(image, "species_result", None)
+                if result is None:
+                    continue
+                payload = dict(result.raw_data or {})
+                payload.update({
+                    "status": result.status or "",
+                    "file_id": image.file_id,
+                    "file_name": image.file_name,
+                    "file_url": image.file_url,
+                })
+                prediction = dict(payload.get("prediction") or {})
+                prediction.update({
+                    "prediction": result.raw_prediction or "",
+                    "prediction_score": result.prediction_score,
+                    "prediction_source": result.prediction_source or "",
+                    "model_version": result.model_version or "",
+                })
+                exported_detections = []
+                for detection in result.detections.all():
+                    row = {
+                        "category": detection.category or "",
+                        "label": detection.label or "",
+                        "conf": detection.confidence,
+                        "bbox": [
+                            detection.bbox_x,
+                            detection.bbox_y,
+                            detection.bbox_width,
+                            detection.bbox_height,
+                        ],
+                    }
+                    if detection.reviewed_taxon_id:
+                        row.update({
+                            "prediction": detection.reviewed_taxon.common_name,
+                            "prediction_score": detection.reviewed_score,
+                            "prediction_source": detection.reviewed_source or "researcher",
+                        })
+                    exported_detections.append(row)
+                prediction["detections"] = exported_detections
+                payload["prediction"] = prediction
+                _write_json_line(species_file, payload)
 
         with archive.open("ocr_results.jsonl", mode="w") as ocr_file:
             for image in images.iterator(chunk_size=1000):
-                ocr_result = getattr(image, "ocr_result", None)
-
-                if ocr_result is not None:
-                    _write_json_line(ocr_file, {
-                        "status": ocr_result.status or "",
-                        "file_id": image.file_id,
-                        "file_name": image.file_name,
-                        "file_url": image.file_url,
-                        "path": image.path,
-                        # Parsed date/time/temperature fields are intentionally
-                        # omitted because the OCR importer regenerates them from
-                        # the original OCR strings.
-                        "ocr_texts": ocr_result.ocr_texts or [],
-                    })
+                result = getattr(image, "ocr_result", None)
+                if result is None:
+                    continue
+                payload = dict(result.raw_data or {})
+                payload.update({
+                    "status": result.status or "",
+                    "file_id": image.file_id,
+                    "file_name": image.file_name,
+                    "file_url": image.file_url,
+                    "path": image.path,
+                    "ocr_texts": result.ocr_texts or [],
+                })
+                _write_json_line(ocr_file, payload)
 
     export_file.seek(0)
-
-    return FileResponse(
-        export_file,
-        as_attachment=True,
-        filename="wild_basin_json_export.zip",
-        content_type="application/zip",
-    )
-
+    return FileResponse(export_file, as_attachment=True, filename="wild_basin_json_export.zip", content_type="application/zip")
 
 def export_csv(request):
     response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = (
-        'attachment; filename="wild_basin_image_export.csv"'
-    )
-
+    response["Content-Disposition"] = 'attachment; filename="wild_basin_image_export.csv"'
     writer = csv.writer(response)
-    writer.writerow([
-        "image_name",
-        "box_url",
-        "path",
-        "prediction",
-        "detection",
-        "date",
-        "time",
-    ])
+    writer.writerow(["image_name", "box_url", "path", "prediction", "detection", "date", "time"])
 
     _, images, _ = _build_gallery_queryset(request)
-    images = images.prefetch_related(
+    images = images.select_related("camera_path", "species_result__top_taxon", "ocr_result").prefetch_related(
         Prefetch(
-            "species_result__species_detections",
-            queryset=SpeciesDetection.objects.order_by("id"),
+            "species_result__detections",
+            queryset=SpeciesDetection.objects.select_related("reviewed_taxon").order_by("detection_index", "id"),
         )
     )
-
-    for image in images:
-        species_result = getattr(image, "species_result", None)
-        ocr_result = getattr(image, "ocr_result", None)
-        capture_date, capture_time = _format_capture_datetime(ocr_result)
-        prediction = clean_species_label(species_result.prediction) if species_result else ""
-
+    for image in images.iterator(chunk_size=1000):
+        result = getattr(image, "species_result", None)
+        ocr = getattr(image, "ocr_result", None)
+        capture_date, capture_time = _format_capture_datetime(ocr)
+        prediction = result.display_prediction if result else ""
         detections = []
-
-        if species_result:
-            detections = [
-                detection.display_prediction
-                for detection in species_result.species_detections.all()
-                if detection.display_prediction
-            ]
-
-        if not detections:
-            detections = [""]
-
-        for detection_label in detections:
-            writer.writerow([
-                image.file_name,
-                image.file_url,
-                image.path,
-                prediction,
-                detection_label,
-                capture_date,
-                capture_time,
-            ])
-
+        if result:
+            detections = [d.display_prediction for d in result.detections.all() if d.display_prediction]
+        for detection_label in detections or [""]:
+            writer.writerow([image.file_name, image.file_url, image.path, prediction, detection_label, capture_date, capture_time])
     return response
-
 
 def _build_gallery_queryset(request, *, optimize_species_filter=False):
     is_researcher = user_is_researcher(request.user)
+    images = ImageRecord.objects.order_by("-id")
 
-    images = ImageRecord.objects.order_by("-created_at")
-
+    # Public visitors see only actual wildlife results: no human images, no
+    # blank/no-result/vehicle/broad labels, and at least one detector box.
+    # Researchers retain access to every imported record.
     if not is_researcher:
         images = images.filter(
-            contains_human=False
+            contains_human=False,
+            has_detection=True,
+            species_result__top_taxon__is_filter_visible=True,
         )
 
     form = GalleryFilterForm(request.GET)
     needs_distinct = False
-
     if form.is_valid():
-        search = form.cleaned_data.get("search")
+        search = (form.cleaned_data.get("search") or "").strip()
         species = form.cleaned_data.get("species")
-        has_ocr = form.cleaned_data.get("has_ocr")
-        has_speciesnet = form.cleaned_data.get("has_speciesnet")
-        min_score = form.cleaned_data.get("min_score")
-        start_date = form.cleaned_data.get("start_date")
-        end_date = form.cleaned_data.get("end_date")
         path = form.cleaned_data.get("path")
 
         if search:
-            images = images.filter(
+            images = images.annotate(
+                ocr_text_search=Cast("ocr_result__ocr_texts", output_field=TextField())
+            ).filter(
                 Q(file_name__icontains=search)
                 | Q(file_id__icontains=search)
-                | Q(path__icontains=search)
-                | Q(ocr_result__ocr_texts__icontains=search)
-                | Q(species_result__prediction__icontains=search)
-                | Q(
-                    species_result__species_detections__prediction__icontains=search
-                )
-                | Q(
-                    species_result__species_detections__detection_type__icontains=search
-                )
+                | Q(camera_path__path__icontains=search)
+                | Q(ocr_text_search__icontains=search)
+                | Q(species_result__top_taxon__common_name__icontains=search)
+                | Q(species_result__detections__reviewed_taxon__common_name__icontains=search)
+                | Q(species_result__detections__label__icontains=search)
             )
-
             needs_distinct = True
 
         if path:
-            selected_paths = [
-                item.strip()
-                for item in path.split(",")
-                if item.strip()
-            ]
-
+            selected_paths = [item.strip() for item in path.split(",") if item.strip()]
             if selected_paths:
-                path_query = Q()
-
-                for selected_path in selected_paths:
-                    path_query |= Q(path__icontains=selected_path)
-
-                images = images.filter(path_query)
+                images = images.filter(camera_path__path__in=selected_paths)
 
         if species:
-            selected_species = [
-                item.strip()
-                for item in species.split(",")
-                if item.strip()
-            ]
-
+            selected_species = [item.strip() for item in species.split(",") if item.strip()]
             if selected_species:
-                if optimize_species_filter:
-                    # Gallery selections come from SpeciesLabel, whose names are
-                    # normalized from SpeciesDetection.prediction. Use an exact
-                    # indexed lookup inside EXISTS instead of joining detection
-                    # rows and deduplicating ImageRecord with DISTINCT.
-                    matching_detection = SpeciesDetection.objects.filter(
-                        species_result__image_id=OuterRef("pk"),
-                        prediction__in=selected_species,
-                    )
-                    images = images.filter(Exists(matching_detection))
-                else:
-                    # Preserve the existing broader semantics for exports and
-                    # other callers of this shared queryset builder.
-                    species_query = Q()
+                images = images.filter(
+                    Q(species_result__top_taxon__common_name__in=selected_species)
+                    | Q(species_result__detections__reviewed_taxon__common_name__in=selected_species)
+                )
+                needs_distinct = True
 
-                    for selected_label in selected_species:
-                        species_query |= Q(
-                            species_result__prediction__icontains=selected_label
-                        )
-
-                        species_query |= Q(
-                            species_result__species_detections__prediction__icontains=
-                            selected_label
-                        )
-
-                    images = images.filter(species_query)
-                    needs_distinct = True
-
-        if has_ocr:
-            images = images.filter(
-                ocr_result__isnull=False
-            )
-
-        if has_speciesnet:
-            images = images.filter(
-                species_result__isnull=False
-            )
-
+        if form.cleaned_data.get("has_ocr"):
+            images = images.filter(ocr_result__isnull=False)
+        if form.cleaned_data.get("has_speciesnet"):
+            images = images.filter(species_result__isnull=False)
+        min_score = form.cleaned_data.get("min_score")
         if min_score is not None:
-            images = images.filter(
-                species_result__prediction_score__gte=min_score
-            )
-
+            images = images.filter(species_result__prediction_score__gte=min_score)
+        start_date = form.cleaned_data.get("start_date")
         if start_date:
-            images = images.filter(
-                ocr_result__capture_date__gte=start_date
-            )
-
+            images = images.filter(capture_date__gte=start_date)
+        end_date = form.cleaned_data.get("end_date")
         if end_date:
-            images = images.filter(
-                ocr_result__capture_date__lte=end_date
-            )
+            images = images.filter(capture_date__lte=end_date)
 
     if needs_distinct:
         images = images.distinct()
-
     return form, images, is_researcher
 
 def path_search(request):
     query = request.GET.get("q", "").strip()
-
-    matching_paths = CameraPath.objects.all()
-
+    paths = CameraPath.objects.all()
     if query:
-        matching_paths = matching_paths.filter(
-            path__icontains=query
-        )
-
-    matching_paths = matching_paths.order_by("path")[:20]
-
-    return JsonResponse({
-        "results": [
-            {
-                "id": item.path,
-                "text": item.path,
-            }
-            for item in matching_paths
-        ]
-    })
+        paths = paths.filter(path__icontains=query)
+    paths = paths.order_by("path")[:20]
+    return JsonResponse({"results": [{"id": p.path, "text": p.path} for p in paths]})
 
 def species_search(request):
     query = request.GET.get("q", "").strip()
     is_researcher = user_is_researcher(request.user)
-
-    labels = SpeciesLabel.objects.all()
-
+    taxa = SpeciesTaxon.objects.all()
     if not is_researcher:
-        labels = labels.filter(is_human=False)
-
+        taxa = taxa.filter(is_filter_visible=True)
     if query:
-        labels = labels.filter(name__icontains=query)
-
-    labels = labels.order_by("name")[:20]
-
-    return JsonResponse({
-        "results": [
-            {
-                "id": label.name,
-                "text": label.name,
-            }
-            for label in labels
-        ]
-    })
+        taxa = taxa.filter(common_name__icontains=query)
+    # Multiple historical taxon IDs can share a display name. Return unique
+    # names because the gallery filter operates on normalized common_name.
+    names = taxa.order_by("common_name").values_list("common_name", flat=True).distinct()[:20]
+    return JsonResponse({"results": [{"id": name, "text": name} for name in names]})
 
 def researcher_dashboard(request):
     box_token_status = check_box_token_status()
@@ -615,93 +465,49 @@ def upload_metadata(request):
 
 def cache_image_ajax(request, file_id):
     image = get_object_or_404(ImageRecord, file_id=file_id)
-
+    if not user_is_researcher(request.user):
+        result = getattr(image, "species_result", None)
+        if (
+            image.contains_human
+            or not image.has_detection
+            or result is None
+            or result.top_taxon is None
+            or not result.top_taxon.is_filter_visible
+        ):
+            raise Http404("Image not found")
     image_url = ensure_cached_image(image)
-
-    if image_url:
-        return JsonResponse({
-            "ok": True,
-            "image_url": image_url,
-        })
-    
-    return JsonResponse({
-        "ok": False,
-        "image_url": None,
-    })
+    return JsonResponse({"ok": bool(image_url), "image_url": image_url})
 
 def gallery(request):
-    form, images, is_researcher = _build_gallery_queryset(
-        request,
-        optimize_species_filter=True,
-    )
-
-    # Gallery pages only show images that have at least one SpeciesDetection.
-    # When a species filter is active, _build_gallery_queryset() already adds
-    # an exact SpeciesDetection EXISTS condition, which also proves that a
-    # detection exists. Avoid adding a second redundant condition in that case.
-    #
-    # For unfiltered/path-filtered pages, retain the correlated EXISTS strategy
-    # that benchmarked much better on SQLite than filtering the low-selectivity
-    # has_species_detection boolean column. The denormalized flag remains
-    # maintained for future use but is intentionally not part of this query.
-    selected_species = (
-        form.cleaned_data.get("species")
-        if form.is_bound and form.is_valid()
-        else None
-    )
-    if not selected_species:
-        detection_exists = SpeciesDetection.objects.filter(
-            species_result__image_id=OuterRef("pk")
-        )
-        images = images.filter(Exists(detection_exists))
-
-    # The gallery template reads SpeciesNet/OCR data for every card. Load the
-    # one-to-one rows in the main query and detections in one additional query
-    # instead of issuing queries per image.
+    form, images, is_researcher = _build_gallery_queryset(request)
     images = images.select_related(
-        "species_result",
+        "camera_path",
+        "species_result__top_taxon",
         "ocr_result",
     ).prefetch_related(
         Prefetch(
-            "species_result__species_detections",
-            queryset=SpeciesDetection.objects.order_by("id"),
+            "species_result__detections",
+            queryset=SpeciesDetection.objects.select_related("reviewed_taxon").order_by("detection_index", "id"),
         )
     )
-
     paginator = Paginator(images, 20)
-    page_obj = paginator.get_page(
-        request.GET.get("page")
-    )
-
-    image_cards = []
-
-    for image in page_obj:
-        image_url = (
-            image.cached_image.url
-            if image.cached_image
-            else None
-        )
-
-        image_cards.append({
+    page_obj = paginator.get_page(request.GET.get("page"))
+    image_cards = [
+        {
             "image": image,
-            "image_url": image_url,
-        })
-
+            "image_url": image.cached_image.url if image.cached_image else None,
+        }
+        for image in page_obj
+    ]
     query_params = request.GET.copy()
     query_params.pop("page", None)
-    query_string = query_params.urlencode()
-
-    return render(
-        request,
-        "images/gallery.html",
-        {
-            "form": form,
-            "page_obj": page_obj,
-            "image_cards": image_cards,
-            "is_researcher": is_researcher,
-            "query_string": query_string,
-        },
-    )
+    return render(request, "images/gallery.html", {
+        "form": form,
+        "page_obj": page_obj,
+        "image_cards": image_cards,
+        "is_researcher": is_researcher,
+        "query_string": query_params.urlencode(),
+    })
 
 def user_is_researcher(user):
     return (
@@ -713,206 +519,96 @@ def user_is_researcher(user):
     )
 
 def image_detail(request, file_id):
-    back_url = (
-        request.GET.get("next")
-        or request.POST.get("next")
-        or reverse("gallery")
-    )
-
+    back_url = request.GET.get("next") or request.POST.get("next") or reverse("gallery")
     image = get_object_or_404(
-        ImageRecord.objects.prefetch_related(
-            "species_result__species_detections"
+        ImageRecord.objects.select_related(
+            "camera_path", "species_result__top_taxon", "ocr_result"
+        ).prefetch_related(
+            Prefetch(
+                "species_result__detections",
+                queryset=SpeciesDetection.objects.select_related("reviewed_taxon").order_by("detection_index", "id"),
+            )
         ),
         file_id=file_id,
     )
-
     can_edit = user_is_researcher(request.user)
+    species_result = getattr(image, "species_result", None)
+    ocr_result = getattr(image, "ocr_result", None)
 
-    species_result = SpeciesNetResult.objects.filter(
-        image=image
-    ).first()
-
-    ocr_result = OCRResult.objects.filter(
-        image=image
-    ).first()
-
-    # Public users must not see images containing humans.
-    # Public users must not see images containing humans.
-    if not can_edit and image.contains_human:
-        raise Http404("Image not found")
+    if not can_edit:
+        if (
+            image.contains_human
+            or not image.has_detection
+            or species_result is None
+            or species_result.top_taxon is None
+            or not species_result.top_taxon.is_filter_visible
+        ):
+            raise Http404("Image not found")
 
     image_url = ensure_cached_image(image)
-
-    if species_result:
-        detection_queryset = (
-            species_result.species_detections
-            .all()
-            .order_by("id")
-        )
-    else:
-        detection_queryset = SpeciesDetection.objects.none()
-
+    detection_queryset = species_result.detections.all() if species_result else SpeciesDetection.objects.none()
     bbox_overlays = []
     for detection in detection_queryset:
-        if None in (
-            detection.bbox_x,
-            detection.bbox_y,
-            detection.bbox_width,
-            detection.bbox_height,
-        ):
+        if None in (detection.bbox_x, detection.bbox_y, detection.bbox_width, detection.bbox_height):
             continue
-
         bbox_overlays.append({
             "id": detection.id,
             "left": max(0.0, min(100.0, detection.bbox_x * 100)),
             "top": max(0.0, min(100.0, detection.bbox_y * 100)),
             "width": max(0.0, min(100.0, detection.bbox_width * 100)),
             "height": max(0.0, min(100.0, detection.bbox_height * 100)),
-            "prediction": detection.display_prediction or detection.get_detection_type_display() or "Detection",
-            "confidence": detection.prediction_score if detection.prediction_score is not None else detection.detection_confidence,
+            "prediction": detection.display_prediction or "Detection",
+            "confidence": detection.reviewed_score if detection.reviewed_score is not None else detection.confidence,
         })
 
     if request.method == "POST":
         if not can_edit:
-            return redirect(
-                "image_detail",
-                file_id=image.file_id,
-            )
-
-        # Only create records when a researcher submits edits.
+            return redirect("image_detail", file_id=image.file_id)
         if species_result is None:
-            species_result = SpeciesNetResult.objects.create(
-                image=image
-            )
-
+            species_result = SpeciesNetResult.objects.create(image=image)
+            detection_queryset = SpeciesDetection.objects.none()
         if ocr_result is None:
-            ocr_result = OCRResult.objects.create(
-                image=image
-            )
+            ocr_result = OCRResult.objects.create(image=image)
 
-        species_post_data = request.POST.copy()
-
-        species_form = SpeciesNetEditForm(
-            species_post_data,
-            instance=species_result,
-        )
-
-        ocr_form = OCREditForm(
-            request.POST,
-            instance=ocr_result,
-        )
-
+        ocr_form = OCREditForm(request.POST, instance=ocr_result)
         detection_formset = SpeciesDetectionFormSet(
             request.POST,
             queryset=detection_queryset,
             prefix="detections",
         )
-
-        # SpeciesNetEditForm is not rendered on this page, so saving the
-        # bound form here would replace the existing image-level prediction,
-        # score, and source with blank POST values. Preserve the original
-        # SpeciesNet result and only save the fields that the researcher can
-        # actually edit on this page.
-        if (
-            ocr_form.is_valid()
-            and detection_formset.is_valid()
-        ):
-            species_detections_changed = detection_formset.has_changed()
-
+        if ocr_form.is_valid() and detection_formset.is_valid():
+            changed = detection_formset.has_changed()
             ocr_form.save()
             detection_formset.save()
-
-            ensure_species_labels(
-                [
-                    detection.prediction
-                    for detection in species_result.species_detections.all()
-                    if detection.prediction
-                ]
-            )
-
-            if species_detections_changed:
+            if changed:
                 species_result.status = "updated"
-                species_result.save(
-                    update_fields=["status"]
-                )
-
-                prediction_contains_human = (
-                    "human"
-                    in (
-                        species_result.prediction
-                        or ""
-                    ).lower()
-                )
-
-                detection_contains_human = (
-                    species_result.species_detections
-                    .filter(
-                        detection_type="human"
-                    )
-                    .exists()
-                )
-
+                species_result.save(update_fields=["status", "imported_at"])
                 image.contains_human = (
-                    prediction_contains_human
-                    or detection_contains_human
+                    (species_result.top_taxon.is_human if species_result.top_taxon_id else False)
+                    or species_result.detections.filter(label__iexact="human").exists()
                 )
-                image.has_species_detection = (
-                    species_result.species_detections.exists()
-                )
-
-                image.save(
-                    update_fields=[
-                        "contains_human",
-                        "has_species_detection",
-                    ]
-                )
-
-            messages.success(
-                request,
-                "Image metadata updated.",
-            )
-
-            detail_url = reverse(
-                "image_detail",
-                args=[image.file_id],
-            )
-
-            return redirect(
-                f"{detail_url}?next={back_url}"
-            )
-
+                image.has_detection = species_result.detections.exists()
+                image.save(update_fields=["contains_human", "has_detection", "updated_at"])
+            messages.success(request, "Image metadata updated.")
+            detail_url = reverse("image_detail", args=[image.file_id])
+            return redirect(f"{detail_url}?next={back_url}")
     else:
-        species_form = SpeciesNetEditForm(
-            instance=species_result
-        )
+        ocr_form = OCREditForm(instance=ocr_result or OCRResult(image=image))
+        detection_formset = SpeciesDetectionFormSet(queryset=detection_queryset, prefix="detections")
 
-        ocr_form = OCREditForm(
-            instance=ocr_result
-        )
-
-        detection_formset = SpeciesDetectionFormSet(
-            queryset=detection_queryset,
-            prefix="detections",
-        )
-
-    return render(
-        request,
-        "images/image_detail.html",
-        {
-            "image": image,
-            "image_url": image_url,
-            "species_result": species_result,
-            "ocr_result": ocr_result,
-            "detections": detection_queryset,
-            "bbox_overlays": bbox_overlays,
-            "can_edit": can_edit,
-            "species_form": species_form,
-            "ocr_form": ocr_form,
-            "detection_formset": detection_formset,
-            "back_url": back_url,
-        },
-    )
-
+    return render(request, "images/image_detail.html", {
+        "image": image,
+        "image_url": image_url,
+        "species_result": species_result,
+        "ocr_result": ocr_result,
+        "detections": detection_queryset,
+        "bbox_overlays": bbox_overlays,
+        "can_edit": can_edit,
+        "species_form": SpeciesNetEditForm(instance=species_result) if species_result else None,
+        "ocr_form": ocr_form,
+        "detection_formset": detection_formset,
+        "back_url": back_url,
+    })
 
 def about(request):
     return render(request, "images/about.html")

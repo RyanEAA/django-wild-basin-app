@@ -482,14 +482,6 @@
                 </div>
 
 
-                <div class="meta-row">
-
-                    <strong>DateTime</strong>
-
-                    {{ ocr_form.capture_datetime }}
-
-                </div>
-
 
             {% elif ocr_result %}
 
@@ -553,16 +545,6 @@
 
                 </div>
 
-
-                <div class="meta-row">
-
-                    <strong>DateTime</strong>
-
-                    <span>
-                        {{ ocr_result.capture_datetime|default:"—" }}
-                    </span>
-
-                </div>
 
 
             {% else %}

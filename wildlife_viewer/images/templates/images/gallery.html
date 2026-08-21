@@ -109,29 +109,19 @@
                 <p class="meta-line">📍 {{ card.image.path|truncatechars:70 }}</p>
 
                 {% if card.image.species_result %}
+                    <p>
+                        <span class="badge">{{ card.image.species_result.display_prediction|default:"SpeciesNet result" }}</span>
+                    </p>
                     <p><strong>Score:</strong> {{ card.image.species_result.prediction_score|floatformat:3 }}</p>
-
-                    {% for detection in card.image.species_result.species_detections.all %}
-                        {% if detection.source == "animal" %}
-                            <span class="badge">
-                                {{ detection.label }}
-                                {% if detection.confidence %}
-                                    {{ detection.confidence|floatformat:2 }}
-                                {% endif %}
-                            </span>
-                        {% endif %}
-                    {% empty %}
-                        <p>No classified animals.</p>
-                    {% endfor %}
                 {% else %}
                     <p>No SpeciesNet result.</p>
                 {% endif %}
 
                 {% if card.image.ocr_result %}
                     <p class="meta-line">
-                        {{ card.image.ocr_result.capture_date|default:"No date" }}
+                        {{ card.image.capture_date|default:"No date" }}
                         ·
-                        {{ card.image.ocr_result.temperature_f|default:"—" }} °F
+                        {{ card.image.temperature_f|default:"—" }} °F
                     </p>
                 {% else %}
                     <p class="meta-line">No OCR result</p>

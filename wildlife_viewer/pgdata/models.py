@@ -226,6 +226,41 @@ class SpeciesDetection(models.Model):
     def __str__(self):
         return f"{self.label or self.category} ({self.confidence})"
 
+    @property
+    def source(self):
+        return self.label
+
+    @property
+    def detection_type(self):
+        return self.label
+
+    @property
+    def detection_confidence(self):
+        return self.confidence
+
+    @property
+    def prediction(self):
+        return self.reviewed_taxon.common_name if self.reviewed_taxon_id else ""
+
+    @property
+    def prediction_score(self):
+        return self.reviewed_score
+
+    @property
+    def prediction_source(self):
+        return self.reviewed_source
+
+    @property
+    def display_prediction(self):
+        if self.reviewed_taxon_id:
+            return self.reviewed_taxon.common_name
+        if self.label == "animal" and self.species_result_id:
+            return self.species_result.display_prediction
+        return self.label or self.category
+
+    def get_detection_type_display(self):
+        return self.label or self.category
+
 
 class OCRResult(models.Model):
     image = models.OneToOneField(
@@ -237,6 +272,28 @@ class OCRResult(models.Model):
     ocr_texts = models.JSONField(default=list, blank=True)
     raw_data = models.JSONField(default=dict, blank=True)
     imported_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def temperature_f(self):
+        return self.image.temperature_f
+
+    @property
+    def capture_date(self):
+        return self.image.capture_date
+
+    @property
+    def capture_time(self):
+        return self.image.capture_time
+
+    @property
+    def capture_datetime(self):
+        if not self.image.capture_date:
+            return None
+        from datetime import datetime, time
+        return datetime.combine(
+            self.image.capture_date,
+            self.image.capture_time or time.min,
+        )
 
     def __str__(self):
         return f"OCRResult(image={self.image.file_id}, status={self.status})"
